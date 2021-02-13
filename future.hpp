@@ -11,7 +11,7 @@ class FutureBase {
 		/**
 		 * Acquires the state of the future.
 		 * Most states are "reserved" for internal use - linked to the generator's state.
-		 * The 2 that aren't, and only ones that actually make sense for any non-engine future are `Awaiting` and `Completed`.
+		 * The 2 that aren't, and only ones that actually make sense for any non-engine future are `Running` and `Completed`.
 		 * 
 		 * @returns current state of the future
 		 */
