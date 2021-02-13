@@ -40,10 +40,6 @@ class Yengine {
 	 */
 	ThreadSafeQueue<std::shared_ptr<FutureBase>> work;
 	/**
-	 * AGenerator<?> → Future
-	 */
-	//std::unordered_map<std::shared_ptr<std::any>, std::shared_ptr<FutureBase>> g2f;
-	/**
 	 * Future → Future
 	 */
 	std::unordered_map<std::shared_ptr<FutureBase>, std::shared_ptr<FutureBase>> notifications;
