@@ -83,7 +83,7 @@ class Yengine {
 		 * @param f @ref future to map
 		 * @returns @ref
 		 */
-		template<typename U, typename V, typename F> std::shared_ptr<Future<V>> then(std::shared_ptr<Future<U>> f, F map){
+		template<typename V, typename U, typename F> std::shared_ptr<Future<V>> then(std::shared_ptr<Future<U>> f, F map){
 			return defer(std::shared_ptr(new ChainingGenerator<U, V, F>(f, map)));
 		}
 	private:
