@@ -83,7 +83,8 @@ public:
             list.splice(list.end(), tmpList, tmpList.begin());
 
             // Wake up one popping thread.
-            cvPop.notify_one();
+            if (currentSize == 1u)
+                cvPop.notify_one();
         }
     }
 
