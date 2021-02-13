@@ -18,6 +18,13 @@ enum class FutureState {
  */
 class FutureBase {
 	public:
+		/**
+		 * Acquires the state of the future.
+		 * Most states are "reserved" for internal use - linked to the generators' state.
+		 * The 2 that aren't, and only ones that actually make sense for any non-engine future are `Awaiting` and `Completed`.
+		 * 
+		 * @returns current state of the future
+		 */
 		virtual FutureState state() = 0;
 };
 
@@ -65,7 +72,7 @@ class Yengine {
 	/**
 	 * Future → Future
 	 */
-	std::unordered_map<std::shared_ptr<FutureBase>, std::shared_ptr<FutureBase>> notify; //TODO sync!!!
+	std::unordered_map<std::shared_ptr<FutureBase>, std::shared_ptr<FutureBase>> notifications; //TODO sync!!!
 	public:
 		/**
 		 * Transforms a generator into a future on this engine
@@ -95,6 +102,13 @@ class Yengine {
 			return execute(defer(gen));
 		}
 		/**
+		 * Notifies the engine of completion of an external future.
+		 * Returns almost immediately - actual processing of the notification will happen internally.
+		 */
+		template<typename T> void notify(std::shared_ptr<Future<T>> f){
+			launch(std::shared_ptr(new ChainingGenerator(f, [](auto v){ return v; }));
+		}
+		/**
 		 * @param f @ref future to map
 		 * @returns @ref
 		 */
@@ -117,7 +131,7 @@ class Yengine {
 						break;
 					case FutureState::Suspended:
 						gent->s = FutureState::Awaiting;
-						notify[*awa] = task;
+						notifications[*awa] = task;
 						task = *awa;
 						// goto cont;
 						break;
@@ -125,16 +139,16 @@ class Yengine {
 					case FutureState::Awaiting:
 					case FutureState::Running:
 						gent->s = FutureState::Awaiting;
-						notify[*awa] = task;
+						notifications[*awa] = task;
 						return;
 				}
 			} else {
 				auto v = std::get<std::any>(g);
 				gent->s = gent->gen->done() ? FutureState::Completed : FutureState::Suspended;
 				gent->val = std::optional(v);
-				auto naut = notify.find(task);
-				if(naut != notify.end()){
-					notify.erase(naut); //#BeLazy: Whether we're done or not, drop from notifications. If we're done, well that's it. If we aren't, someone up in the pipeline will await for us at some point, setting up the notifications once again.
+				auto naut = notifications.find(task);
+				if(naut != notifications.end()){
+					notifications.erase(naut); //#BeLazy: Whether we're done or not, drop from notifications. If we're done, well that's it. If we aren't, someone up in the pipeline will await for us at some point, setting up the notifications once again.
 					task = naut->second; //Proceed up the await chain immediately
 					// goto cont;
 					break;
