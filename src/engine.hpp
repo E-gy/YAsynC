@@ -90,7 +90,11 @@ class Yengine {
 		 * Returns almost immediately - actual processing of the notification will happen internally.
 		 */
 		template<typename T> void notify(std::shared_ptr<Future<T>> f){
-			launch(std::shared_ptr<AGenerator<T>>(new IdentityGenerator<T>(f)));
+			if(auto noti = notifiDrop(f)){
+				auto redir = defer(std::shared_ptr<AGenerator<T>>(new IdentityGenerator<T>(f)));
+				notifiAdd(redir, *noti);
+				execute(redir);
+			}
 		}
 		/**
 		 * @param f @ref future to map
