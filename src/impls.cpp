@@ -5,7 +5,7 @@
 #include "engine.hpp"
 
 bool RangeGenerator::done() const { return c >= e; }
-std::variant<std::shared_ptr<FutureBase>, int> RangeGenerator::resume(const Yengine* eng){
+std::variant<std::shared_ptr<FutureBase>, int> RangeGenerator::resume([[maybe_unused]] const Yengine* eng){
 	return c++;
 }
 
@@ -30,7 +30,7 @@ template<typename T> class OutsideFuture : public Future<T> {
 template<typename T> std::shared_ptr<Future<T>> asyncSleep(Yengine* engine, unsigned ms, T ret){
 	std::shared_ptr<OutsideFuture<T>> f(new OutsideFuture<T>());
 	std::thread th([engine, ms, ret](std::shared_ptr<OutsideFuture<T>> f){
-		std::this_thread::sleep_for(ms);
+		std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 		f->s = FutureState::Completed;
 		f->r = ret;
 		engine->notify(f);

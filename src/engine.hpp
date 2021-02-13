@@ -25,9 +25,9 @@ template<typename U, typename V, typename F> class ChainingGenerator : public AG
 	bool reqd = false;
 	F f;
 	public:
-		ChainingGenerator(Fstd::shared_ptr<Future<U>> awa, F map) : w(awa), f(map) {}
+		ChainingGenerator(std::shared_ptr<Future<U>> awa, F map) : w(awa), f(map) {}
 		bool done() const { return reqd && w->state() == FutureState::Completed; }
-		std::variant<std::shared_ptr<Future<U>, V> resume(const Yengine* engine){
+		std::variant<std::shared_ptr<Future<U>>, V> resume(const Yengine* engine){
 			if(w->state() == FutureState::Completed) return f(w->result());
 			if((reqd = !reqd)) return w;
 			else return f(w->result());
@@ -77,7 +77,7 @@ class Yengine {
 		 * Returns almost immediately - actual processing of the notification will happen internally.
 		 */
 		template<typename T> void notify(std::shared_ptr<Future<T>> f){
-			launch(std::shared_ptr(new ChainingGenerator(f, [](auto v){ return v; }));
+			launch(std::shared_ptr(new ChainingGenerator(f, [](auto v){ return v; })));
 		}
 		/**
 		 * @param f @ref future to map
@@ -89,11 +89,11 @@ class Yengine {
 	private:
 		std::mutex notificationsLock;
 		void notifiAdd(std::shared_ptr<FutureBase> k, std::shared_ptr<FutureBase> v){
-			std::unique_lock(notificationsLock);
+			std::unique_lock lock(notificationsLock);
 			notifications[k] = v;
 		}
 		std::optional<std::shared_ptr<FutureBase>> notifiDrop(std::shared_ptr<FutureBase> k){
-			std::unique_lock(notificationsLock);
+			std::unique_lock lock(notificationsLock);
 			auto naut = notifications.find(k);
 			if(naut == notifications.end()) return std::nullopt;
 			notifications.erase(naut);
