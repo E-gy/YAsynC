@@ -41,14 +41,15 @@ template<typename T> class FutureG : public Future<T> {
 
 template<typename U, typename V, typename F> class ChainingGenerator : public AGenerator<V> {
 	std::shared_ptr<Future<U>> w;
+	bool reqd = false;
 	F f;
 	public:
-		ChainingGenerator(Fstd::shared_ptr<Future<U>> awa, F map) : w(awa), f(map) {
-			static_assert(std::is_function<F>);
-		}
-		bool done() const { return result.has_value(); }
+		ChainingGenerator(Fstd::shared_ptr<Future<U>> awa, F map) : w(awa), f(map) {}
+		bool done() const { return reqd && w->state() == FutureState::Completed; }
 		std::variant<std::shared_ptr<Future<U>, V> resume(const Yengine* engine){
-			return w->state() == FutureState::Completed ? f(w->result()) : w;
+			if(w->state() == FutureState::Completed) return f(w->result());
+			if((reqd = !reqd)) return w;
+			else return f(w->result());
 		}
 };
 
@@ -77,12 +78,21 @@ class Yengine {
 			return f;
 		}
 		/**
+		 * Transforms a generator into lazy future, that will be evaluated once queried
+		 * @param gen @ref the generator to yield value from
+		 * @returns @ref 
+		 */ 
+		template<typename T> std::shared_ptr<Future<T>> defer(std::shared_ptr<AGenerator<T>> gen){
+			return std::shared_ptr(new FutureG<T>(gen));
+		}
+		/**
 		 * @param f @ref future to map
 		 * @returns @ref
 		 */
 		template<typename U, typename V, typename F> std::shared_ptr<Future<V>> then(std::shared_ptr<Future<U>> f, F map){
-			return execute(std::shared_ptr(new ChainingGenerator<U, V, F>(f, map)));
+			return defer(std::shared_ptr(new ChainingGenerator<U, V, F>(f, map)));
 		}
+	private:
 		void threado(std::shared_ptr<FutureBase> task){
 			if(task->state() != FutureState::Suspended) return; //Only suspended tasks are resumeable
 			//cont:
