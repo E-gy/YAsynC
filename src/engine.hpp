@@ -46,7 +46,7 @@ class Yengine {
 	/**
 	 * Future → Future
 	 */
-	std::unordered_map<std::shared_ptr<FutureBase>, std::shared_ptr<FutureBase>> notifications; //TODO sync!!!
+	std::unordered_map<std::shared_ptr<FutureBase>, std::shared_ptr<FutureBase>> notifications;
 	public:
 		/**
 		 * Transforms a generator into a future on this engine
@@ -90,6 +90,18 @@ class Yengine {
 			return defer(std::shared_ptr(new ChainingGenerator<U, V, F>(f, map)));
 		}
 	private:
+		std::mutex notificationsLock;
+		void notifiAdd(std::shared_ptr<FutureBase> k, std::shared_ptr<FutureBase> v){
+			std::unique_lock(notificationsLock);
+			notifications[k] = v;
+		}
+		std::optional<std::shared_ptr<FutureBase>> notifiDrop(std::shared_ptr<FutureBase> k){
+			std::unique_lock(notificationsLock);
+			auto naut = notifications.find(k);
+			if(naut == notifications.end()) return std::nullopt;
+			notifications.erase(naut);
+			return naut->second;
+		}
 		void threado(std::shared_ptr<FutureBase> task){
 			if(task->state() != FutureState::Suspended) return; //Only suspended tasks are resumeable
 			//cont:
@@ -105,7 +117,7 @@ class Yengine {
 						break;
 					case FutureState::Suspended:
 						gent->s = FutureState::Awaiting;
-						notifications[*awa] = task;
+						notifiAdd(*awa, task);
 						task = *awa;
 						// goto cont;
 						break;
@@ -113,19 +125,16 @@ class Yengine {
 					case FutureState::Awaiting:
 					case FutureState::Running:
 						gent->s = FutureState::Awaiting;
-						notifications[*awa] = task;
+						notifiAdd(*awa, task);
 						return;
 				}
 			} else {
 				auto v = std::get<std::any>(g);
 				gent->s = gent->gen->done() ? FutureState::Completed : FutureState::Suspended;
 				gent->val = std::optional(v);
-				auto naut = notifications.find(task);
-				if(naut != notifications.end()){
-					notifications.erase(naut); //#BeLazy: Whether we're done or not, drop from notifications. If we're done, well that's it. If we aren't, someone up in the pipeline will await for us at some point, setting up the notifications once again.
-					task = naut->second; //Proceed up the await chain immediately
-					// goto cont;
-				}
+				//#BeLazy: Whether we're done or not, drop from notifications. If we're done, well that's it. If we aren't, someone up in the pipeline will await for us at some point, setting up the notifications once again.
+				if(auto naut = notifiDrop(task)) task = *naut; //Proceed up the await chain immediately
+				else return;
 			}
 			}
 		}
