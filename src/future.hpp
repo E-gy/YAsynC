@@ -2,7 +2,7 @@
 
 #include <optional>
 
-enum class FutureState {
+enum class FutureState : unsigned int {
 	Suspended, Queued, Running, Awaiting, Completed
 };
 

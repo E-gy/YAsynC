@@ -113,7 +113,7 @@ class Yengine {
 			return naut->second;
 		}
 		void threado(std::shared_ptr<FutureBase> task){
-			if(task->state() != FutureState::Suspended) return; //Only suspended tasks are resumeable
+			if(task->state() > FutureState::Running) return; //Only suspended tasks are resumeable
 			//cont:
 			while(true)
 			{
