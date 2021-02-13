@@ -10,7 +10,7 @@
 #include "threadsafequeue.hpp"
 
 enum class FutureState {
-	Created, Running, Completed
+	Suspended, Running, Awaiting, Completed
 };
 
 /**
@@ -32,29 +32,23 @@ template<typename T> class Future : public FutureBase {
 template<typename T> class FutureG : public Future<T> {
 	public:
 		std::shared_ptr<AGenerator<T>> gen;
+		FutureState s = FutureState::Suspended;
+		std::optional<T> val;
 		FutureG(std::shared_ptr<AGenerator<T>> g) : gen(g) {}
-		FutureState s = FutureState::Created;
 		FutureState state(){ return s; }
-		std::optional<T> result(){ return gen->ret(); }
+		std::optional<T> result(){ return val; }
 };
 
 template<typename U, typename V, typename F> class ChainingGenerator : public AGenerator<V> {
 	std::shared_ptr<Future<U>> w;
 	F f;
-	std::optional<V> result = std::nullopt;
 	public:
 		ChainingGenerator(Fstd::shared_ptr<Future<U>> awa, F map) : w(awa), f(map) {
 			static_assert(std::is_function<F>);
 		}
 		bool done() const { return result.has_value(); }
-		std::optional<V> ret() const { return result; }
-		std::optional<std::shared_ptr<Future<U>>> resume(const Yengine* engine){
-			if(done()) return std::nullopt;
-			if(w->state() == FutureState::Completed){
-				result = std::optional<V>(f(w->result()));
-				return std::nullopt;
-			}
-			return w;
+		std::variant<std::shared_ptr<Future<U>, V> resume(const Yengine* engine){
+			return w->state() == FutureState::Completed ? f(w->result()) : w;
 		}
 };
 
@@ -70,10 +64,10 @@ class Yengine {
 	/**
 	 * Future → Future
 	 */
-	std::unordered_map<std::shared_ptr<FutureBase>, std::shared_ptr<FutureBase>> notify; //TODO sync
+	std::unordered_map<std::shared_ptr<FutureBase>, std::shared_ptr<FutureBase>> notify; //TODO sync!!!
 	public:
 		/**
-		 * Resumes parallel yield of the generator
+		 * Resumes parallel yield of the generator _immediately_
 		 * @param gen @ref the generator to yield value from
 		 * @returns @ref 
 		 */ 
@@ -90,47 +84,42 @@ class Yengine {
 			return execute(std::shared_ptr(new ChainingGenerator<U, V, F>(f, map)));
 		}
 		void threado(std::shared_ptr<FutureBase> task){
-			l0: while(task->state() == FutureState::Created){
-				auto gent = std::dynamic_pointer_cast<FutureG<std::any>>(task);
-				gent->s = FutureState::Running;
-				l1: if(auto awa = gent->gen->resume(this)) switch(awa.value()->state()){
-					case FutureState::Completed: //Current task awaits an already completed task. Resume immediately
-						goto l1;
-					case FutureState::Created: //Created but unstarted task. Execute it here and now; resume on notify.
-						notify[awa.value()] = task; //Starting awa on this thread, even if it has been pushed to work queue, w/o clearing from work is fine -> it will be marked as running, and any thread that picks it up from the queue will skip it. FIXME SYNC! if another thread picks up the task at the same time this thread switches :(((
-						task = awa.value();
-						goto l0;
-					case FutureState::Running: //Current task awaits awa, which is running in parallel. Resume on notify; go pick up more work.
-						notify[awa.value()] = task;
+			if(task->state() != FutureState::Suspended) return; //Only suspended tasks are resumeable
+			//cont:
+			while(true)
+			{
+			auto gent = std::dynamic_pointer_cast<FutureG<std::any>>(task);
+			gent->s = FutureState::Running;
+			auto g = gent->gen->resume(this);
+			if(auto awa = std::get_if<std::shared_ptr<FutureBase>>(&g)){
+				switch((*awa)->state()){
+					case FutureState::Completed:
+						// goto cont;
+						break;
+					case FutureState::Suspended:
+						gent->s = FutureState::Awaiting;
+						notify[*awa] = task;
+						task = *awa;
+						// goto cont;
+						break;
+					case FutureState::Awaiting:
+					case FutureState::Running:
+						gent->s = FutureState::Awaiting;
+						notify[*awa] = task;
 						return;
-				} else {
-					auto naut = notify.find(task);
-					auto na = naut != notify.end() ? std::optional(naut->second) : std::nullopt;
-					if(gent->gen->done()){ //Current task is done, mark it completed and remove notify
-						notify.erase(task);
-						gent->s = FutureState::Completed;
-					}
-					if(na){
-						if(gent->s == FutureState::Completed){
-							task = na.value();
-							goto l0;
-						} else {
-							//Ugh what a mess. So this is a fully fledged async generator. Currently the best thing to do is recurse, on the current thread right?
-							//The big problem here is that _we_ don't capture return values.
-							//And it's possible that the generator produces a new value, before the notify chain got time to capture the old one.
-							//_even_ if we keep the generator running in the same thread
-							//   it suffices for the next task to first sleep for a few seconds, _then_ capture preceding value.
-							//which is a bad idea anyway
-							//> Did i say this is a mess yet?
-							//I guess we have to resort to `any` or some other heap container
-							//Even if it incurs heap alloc performance penalties for primitive values :(
-							//_The_ smart thing would be to keep primitives on stack, and indirect everything else
-							//But that switch sounds very type-unsafe to me as it is...
-							//FIXME
-						}
-					}
 				}
-				
+			} else {
+				auto v = std::get<std::any>(g);
+				gent->s = gent->gen->done() ? FutureState::Completed : FutureState::Suspended;
+				gent->val = std::optional(v);
+				auto naut = notify.find(task);
+				if(naut != notify.end()){
+					notify.erase(naut); //#BeLazy: Whether we're done or not, drop from notifications. If we're done, well that's it. If we aren't, someone up in the pipeline will await for us at some point, setting up the notifications once again.
+					task = naut->second; //Proceed up the await chain immediately
+					// goto cont;
+					break;
+				}
+			}
 			}
 		}
 		void threadwork(){
