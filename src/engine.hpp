@@ -109,8 +109,9 @@ class Yengine {
 			std::unique_lock lock(notificationsLock);
 			auto naut = notifications.find(k);
 			if(naut == notifications.end()) return std::nullopt;
+			auto ret = naut->second;
 			notifications.erase(naut);
-			return naut->second;
+			return ret;
 		}
 		void threado(std::shared_ptr<FutureBase> task){
 			if(task->state() > FutureState::Running) return; //Only suspended tasks are resumeable
