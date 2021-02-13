@@ -117,7 +117,7 @@ class Yengine {
 			//cont:
 			while(true)
 			{
-			auto gent = std::dynamic_pointer_cast<FutureG<std::any>>(task);
+			auto gent = (FutureG<void*>*) task.get();
 			gent->s = FutureState::Running;
 			auto g = gent->gen->resume(this);
 			if(auto awa = std::get_if<std::shared_ptr<FutureBase>>(&g)){
@@ -139,7 +139,7 @@ class Yengine {
 						return;
 				}
 			} else {
-				auto v = std::get<std::any>(g);
+				auto v = std::get<void*>(g);
 				gent->s = gent->gen->done() ? FutureState::Completed : FutureState::Suspended;
 				gent->val = std::optional(v);
 				//#BeLazy: Whether we're done or not, drop from notifications. If we're done, well that's it. If we aren't, someone up in the pipeline will await for us at some point, setting up the notifications once again.
