@@ -20,6 +20,19 @@ template<typename T> class FutureG : public Future<T> {
 		std::optional<T> result(){ return val; }
 };
 
+template<typename T> class IdentityGenerator : public AGenerator<T> {
+	std::shared_ptr<Future<T>> w;
+	bool reqd = false;
+	public:
+		IdentityGenerator(std::shared_ptr<Future<T>> awa) : w(awa) {}
+		bool done() const { return reqd && w->state() == FutureState::Completed; }
+		std::variant<std::shared_ptr<FutureBase>, T> resume([[maybe_unused]] const Yengine* engine){
+			if(w->state() == FutureState::Completed) return *(w->result());
+			if((reqd = !reqd)) return w;
+			else return *(w->result());
+		}
+};
+
 template<typename U, typename V, typename F> class ChainingGenerator : public AGenerator<V> {
 	std::shared_ptr<Future<U>> w;
 	bool reqd = false;
@@ -27,10 +40,10 @@ template<typename U, typename V, typename F> class ChainingGenerator : public AG
 	public:
 		ChainingGenerator(std::shared_ptr<Future<U>> awa, F map) : w(awa), f(map) {}
 		bool done() const { return reqd && w->state() == FutureState::Completed; }
-		std::variant<std::shared_ptr<Future<U>>, V> resume(const Yengine* engine){
-			if(w->state() == FutureState::Completed) return f(w->result());
+		std::variant<std::shared_ptr<FutureBase>, V> resume([[maybe_unused]] const Yengine* engine){
+			if(w->state() == FutureState::Completed) return f(*(w->result()));
 			if((reqd = !reqd)) return w;
-			else return f(w->result());
+			else return f(*(w->result()));
 		}
 };
 
@@ -51,7 +64,7 @@ class Yengine {
 		 * @returns future
 		 */ 
 		template<typename T> std::shared_ptr<Future<T>> defer(std::shared_ptr<AGenerator<T>> gen){
-			return std::shared_ptr(new FutureG<T>(gen));
+			return std::shared_ptr<Future<T>>(new FutureG<T>(gen));
 		}
 		/**
 		 * Resumes parallel yield of the future
@@ -77,14 +90,14 @@ class Yengine {
 		 * Returns almost immediately - actual processing of the notification will happen internally.
 		 */
 		template<typename T> void notify(std::shared_ptr<Future<T>> f){
-			launch(std::shared_ptr(new ChainingGenerator(f, [](auto v){ return v; })));
+			launch(std::shared_ptr<AGenerator<T>>(new IdentityGenerator<T>(f)));
 		}
 		/**
 		 * @param f @ref future to map
 		 * @returns @ref
 		 */
 		template<typename V, typename U, typename F> std::shared_ptr<Future<V>> then(std::shared_ptr<Future<U>> f, F map){
-			return defer(std::shared_ptr(new ChainingGenerator<U, V, F>(f, map)));
+			return defer(std::shared_ptr<AGenerator<V>>(new ChainingGenerator<U, V, F>(f, map)));
 		}
 	private:
 		std::mutex notificationsLock;
