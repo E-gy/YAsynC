@@ -10,7 +10,7 @@
 #include "threadsafequeue.hpp"
 
 enum class FutureState {
-	Suspended, Running, Awaiting, Completed
+	Suspended, Queued, Running, Awaiting, Completed
 };
 
 /**
@@ -68,22 +68,31 @@ class Yengine {
 	std::unordered_map<std::shared_ptr<FutureBase>, std::shared_ptr<FutureBase>> notify; //TODO sync!!!
 	public:
 		/**
-		 * Resumes parallel yield of the generator _immediately_
-		 * @param gen @ref the generator to yield value from
-		 * @returns @ref 
+		 * Transforms a generator into a future on this engine
+		 * @param gen the generator
+		 * @returns future
 		 */ 
-		template<typename T> std::shared_ptr<Future<T>> execute(std::shared_ptr<AGenerator<T>> gen){
-			auto f = std::shared_ptr(new FutureG<T>(gen));
+		template<typename T> std::shared_ptr<Future<T>> defer(std::shared_ptr<AGenerator<T>> gen){
+			return std::shared_ptr(new FutureG<T>(gen));
+		}
+		/**
+		 * Resumes parallel yield of the future
+		 * @param f future to execute
+		 * @returns f
+		 */ 
+		template<typename T> std::shared_ptr<Future<T>> execute(std::shared_ptr<Future<T>> f){
+			auto ft = std::dynamic_pointer_cast<FutureG<T>>(f);
+			ft->s = FutureState::Queued;
 			work.push(f);
 			return f;
 		}
 		/**
-		 * Transforms a generator into lazy future, that will be evaluated once queried
-		 * @param gen @ref the generator to yield value from
-		 * @returns @ref 
+		 * Transforms the generator into a future on this engine, and executes in parallel
+		 * @param gen the generator
+		 * @returns future
 		 */ 
-		template<typename T> std::shared_ptr<Future<T>> defer(std::shared_ptr<AGenerator<T>> gen){
-			return std::shared_ptr(new FutureG<T>(gen));
+		template<typename T> std::shared_ptr<Future<T>> launch(std::shared_ptr<AGenerator<T>> gen){
+			return execute(defer(gen));
 		}
 		/**
 		 * @param f @ref future to map
@@ -112,6 +121,7 @@ class Yengine {
 						task = *awa;
 						// goto cont;
 						break;
+					case FutureState::Queued: //This is stoopid, but hey we don't want to sync what we don't need, so it'll wait
 					case FutureState::Awaiting:
 					case FutureState::Running:
 						gent->s = FutureState::Awaiting;
