@@ -125,7 +125,6 @@ class Yengine {
 					notifications.erase(naut); //#BeLazy: Whether we're done or not, drop from notifications. If we're done, well that's it. If we aren't, someone up in the pipeline will await for us at some point, setting up the notifications once again.
 					task = naut->second; //Proceed up the await chain immediately
 					// goto cont;
-					break;
 				}
 			}
 			}
