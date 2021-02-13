@@ -44,6 +44,7 @@ class Yengine {
 	 */
 	std::unordered_map<std::shared_ptr<FutureBase>, std::shared_ptr<FutureBase>> notifications;
 	public:
+		Yengine(unsigned threads);
 		/**
 		 * Transforms a generator into a future on this engine
 		 * @param gen the generator
