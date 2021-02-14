@@ -27,7 +27,7 @@ struct isVariantMember<T, std::variant<ALL_T...>> : public std::disjunction<std:
  * WARNING: Do not use the move constructor after type erasure. Very bad things will happen.
  * TODO: delete move constructor for type-erased self.
  */
-template<typename T> class something {
+/*template<typename T> class something {
 	protected:
 		using CopyTrivNoExc = std::variant<char, int, long, long long, unsigned char, unsigned int, unsigned long, unsigned long long, void*>;
 		using PT = T*;
@@ -45,8 +45,6 @@ template<typename T> class something {
 		// something(const something& cpy) = delete;
 		something(something&& mv) noexcept {
 			val = mv.val;
-			/*if constexpr (isVariantMember<T, CopyTrivNoExc>::value) mv.val = nullptr;
-			else*/
 			mv.val = CopyTrivNoExc(0);
 		}
 		~something() noexcept {
@@ -60,6 +58,31 @@ template<typename T> class something {
 		RT getr() const noexcept {
 			if constexpr (isVariantMember<T, CopyTrivNoExc>::value) return std::get<T>(std::get<CopyTrivNoExc>(val));
 			else return std::get<PT>(val);
+		}
+		operator T() const noexcept { return get(); }
+};*/
+template<typename T> class something {
+	protected:
+		T* val;
+	public:
+		something(const T& v) noexcept {
+			val = new T(v);
+		}
+		something(const something& cpy) noexcept {
+			val = new T(cpy.get());
+		}
+		something(something&& mv) noexcept {
+			val = mv.val;
+			mv.val = nullptr;
+		}
+		~something() noexcept {
+			if(val) delete val;
+		}
+		T get() const noexcept {
+			return *val;
+		}
+		T* getr() const noexcept {
+			return val;
 		}
 		operator T() const noexcept { return get(); }
 };
