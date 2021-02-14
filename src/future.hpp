@@ -20,5 +20,10 @@ class FutureBase {
 
 template<typename T> class Future : public FutureBase {
 	public:
-		virtual std::optional<T> result() = 0;
+		/**
+		 * The future owns the result, always.
+		 * This is reference accessor.
+		 * @returns @ref
+		 */
+		virtual std::optional<T*> result() = 0;
 };

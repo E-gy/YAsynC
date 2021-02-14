@@ -14,10 +14,13 @@ template<typename T> class FutureG : public Future<T> {
 	public:
 		std::shared_ptr<AGenerator<T>> gen;
 		FutureState s = FutureState::Suspended;
-		std::optional<T> val;
+		std::optional<T*> val;
 		FutureG(std::shared_ptr<AGenerator<T>> g) : gen(g) {}
+		~FutureG(){
+			if(val) delete *val;
+		}
 		FutureState state(){ return s; }
-		std::optional<T> result(){ return val; }
+		std::optional<T*> result(){ return val; }
 };
 
 template<typename T> class IdentityGenerator : public AGenerator<T> {
@@ -40,7 +43,7 @@ template<typename U, typename V, typename F> class ChainingGenerator : public AG
 	public:
 		ChainingGenerator(std::shared_ptr<Future<U>> awa, F map) : w(awa), f(map) {}
 		bool done() const { return reqd && w->state() == FutureState::Completed; }
-		std::variant<std::shared_ptr<FutureBase>, V> resume([[maybe_unused]] const Yengine* engine){
+		std::variant<std::shared_ptr<FutureBase>, V*> resume([[maybe_unused]] const Yengine* engine){
 			if(w->state() == FutureState::Completed) return f(*(w->result()));
 			if((reqd = !reqd)) return w;
 			else return f(*(w->result()));
@@ -122,7 +125,7 @@ class Yengine {
 			//cont:
 			while(true)
 			{
-			auto gent = (FutureG<void*>*) task.get();
+			auto gent = (FutureG<void>*) task.get();
 			gent->s = FutureState::Running;
 			auto g = gent->gen->resume(this);
 			if(auto awa = std::get_if<std::shared_ptr<FutureBase>>(&g)){

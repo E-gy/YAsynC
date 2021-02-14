@@ -27,5 +27,5 @@ template<typename R> class AGenerator {
 		 * @param engine @ref async engine to launch tasks in parallel
 		 * @returns @produces the next value if ready, the future this generator is awaiting for otherwise
 		 */
-		virtual std::variant<std::shared_ptr<FutureBase>, R> resume(const Yengine* engine) = 0;
+		virtual std::variant<std::shared_ptr<FutureBase>, R*> resume(const Yengine* engine) = 0;
 };
