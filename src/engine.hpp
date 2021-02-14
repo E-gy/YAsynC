@@ -27,9 +27,8 @@ template<typename T> class IdentityGenerator : public AGenerator<T> {
 		IdentityGenerator(std::shared_ptr<Future<T>> awa) : w(awa) {}
 		bool done() const { return reqd && w->state() == FutureState::Completed; }
 		std::variant<std::shared_ptr<FutureBase>, something<T>> resume([[maybe_unused]] const Yengine* engine){
-			if(w->state() == FutureState::Completed) return something<T>(*(w->result()));
-			if((reqd = !reqd)) return w;
-			else return something<T>(*(w->result()));
+			if(w->state() == FutureState::Completed || !(reqd = !reqd)) return something<T>(*(w->result()));
+			else return w;
 		}
 };
 
@@ -41,9 +40,8 @@ template<typename V, typename U, typename F> class ChainingGenerator : public AG
 		ChainingGenerator(std::shared_ptr<Future<U>> awa, F map) : w(awa), f(map) {}
 		bool done() const { return reqd && w->state() == FutureState::Completed; }
 		std::variant<std::shared_ptr<FutureBase>, something<V>> resume([[maybe_unused]] const Yengine* engine){
-			if(w->state() == FutureState::Completed) return something<V>(f(*(w->result())));
-			if((reqd = !reqd)) return w;
-			else return something<V>(f(*(w->result())));
+			if(w->state() == FutureState::Completed || !(reqd = !reqd)) return something<V>(f(*(w->result())));
+			else return w;
 		}
 };
 
