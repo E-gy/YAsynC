@@ -33,7 +33,7 @@ template<typename T> class IdentityGenerator : public AGenerator<T> {
 		}
 };
 
-template<typename U, typename V, typename F> class ChainingGenerator : public AGenerator<V> {
+template<typename V, typename U, typename F> class ChainingGenerator : public AGenerator<V> {
 	std::shared_ptr<Future<U>> w;
 	bool reqd = false;
 	F f;
@@ -102,7 +102,7 @@ class Yengine {
 		 * @returns @ref
 		 */
 		template<typename V, typename U, typename F> std::shared_ptr<Future<V>> then(std::shared_ptr<Future<U>> f, F map){
-			return defer(std::shared_ptr<AGenerator<V>>(new ChainingGenerator<U, V, F>(f, map)));
+			return defer(std::shared_ptr<AGenerator<V>>(new ChainingGenerator<V, U, F>(f, map)));
 		}
 	private:
 		std::mutex notificationsLock;
