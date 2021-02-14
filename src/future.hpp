@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include "something.hpp"
 
 enum class FutureState : unsigned int {
 	Suspended, Queued, Running, Awaiting, Completed
@@ -25,5 +26,5 @@ template<typename T> class Future : public FutureBase {
 		 * This is reference accessor.
 		 * @returns @ref
 		 */
-		virtual std::optional<T*> result() = 0;
+		virtual std::optional<something<T>> result() = 0;
 };

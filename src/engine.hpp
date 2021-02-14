@@ -14,13 +14,10 @@ template<typename T> class FutureG : public Future<T> {
 	public:
 		std::shared_ptr<AGenerator<T>> gen;
 		FutureState s = FutureState::Suspended;
-		std::optional<T*> val;
+		std::optional<something<T>> val;
 		FutureG(std::shared_ptr<AGenerator<T>> g) : gen(g) {}
-		~FutureG(){
-			if(val) delete *val;
-		}
 		FutureState state(){ return s; }
-		std::optional<T*> result(){ return val; }
+		std::optional<something<T>> result(){ return val; }
 };
 
 template<typename T> class IdentityGenerator : public AGenerator<T> {
@@ -29,10 +26,10 @@ template<typename T> class IdentityGenerator : public AGenerator<T> {
 	public:
 		IdentityGenerator(std::shared_ptr<Future<T>> awa) : w(awa) {}
 		bool done() const { return reqd && w->state() == FutureState::Completed; }
-		std::variant<std::shared_ptr<FutureBase>, T*> resume([[maybe_unused]] const Yengine* engine){
-			if(w->state() == FutureState::Completed) return new T(**(w->result()));
+		std::variant<std::shared_ptr<FutureBase>, something<T>> resume([[maybe_unused]] const Yengine* engine){
+			if(w->state() == FutureState::Completed) return something<T>(*(w->result()));
 			if((reqd = !reqd)) return w;
-			else return new T(**(w->result()));
+			else return something<T>(*(w->result()));
 		}
 };
 
@@ -43,10 +40,10 @@ template<typename U, typename V, typename F> class ChainingGenerator : public AG
 	public:
 		ChainingGenerator(std::shared_ptr<Future<U>> awa, F map) : w(awa), f(map) {}
 		bool done() const { return reqd && w->state() == FutureState::Completed; }
-		std::variant<std::shared_ptr<FutureBase>, V*> resume([[maybe_unused]] const Yengine* engine){
-			if(w->state() == FutureState::Completed) return f(*(w->result()));
+		std::variant<std::shared_ptr<FutureBase>, something<V>> resume([[maybe_unused]] const Yengine* engine){
+			if(w->state() == FutureState::Completed) return something<V>(f(*(w->result())));
 			if((reqd = !reqd)) return w;
-			else return f(*(w->result()));
+			else return something<V>(f(*(w->result())));
 		}
 };
 
@@ -126,7 +123,7 @@ class Yengine {
 			//cont:
 			while(true)
 			{
-			auto gent = (FutureG<void>*) task.get();
+			auto gent = (FutureG<void*>*) task.get();
 			gent->s = FutureState::Running;
 			auto g = gent->gen->resume(this);
 			if(auto awa = std::get_if<std::shared_ptr<FutureBase>>(&g)){
@@ -148,9 +145,9 @@ class Yengine {
 						return;
 				}
 			} else {
-				auto v = std::get<void*>(g);
+				auto v = std::get_if<something<void*>>(&g); //do NOT!!! copy. C++ compiler reaaally wants to copy. NO!
 				gent->s = gent->gen->done() ? FutureState::Completed : FutureState::Suspended;
-				gent->val = std::optional(v);
+				gent->val.emplace(v);
 				//#BeLazy: Whether we're done or not, drop from notifications. If we're done, well that's it. If we aren't, someone up in the pipeline will await for us at some point, setting up the notifications once again.
 				if(auto naut = notifiDrop(task)) task = *naut; //Proceed up the await chain immediately
 				else return;
