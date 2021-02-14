@@ -116,6 +116,10 @@ template<typename U, typename F> auto then(std::shared_ptr<Future<U>> f, F map){
 	return then_spec(f, map, _typed<V>{});
 }
 
+template<typename U, typename F> auto operator>>(std::shared_ptr<Future<U>> f, F map){
+	return then(f, map);
+}
+
 /**
  * @see then but with manual type parametrization
  */
@@ -146,6 +150,9 @@ class Yengine {
 			ft->s = FutureState::Queued;
 			work.push(f);
 			return f;
+		}
+		template<typename T> auto operator<<=(std::shared_ptr<Future<T>> f){
+			return execute(f);
 		}
 		/**
 		 * Transforms the generator into a future on this engine, and executes in parallel
