@@ -19,10 +19,8 @@
 #include <mutex>
 #include <condition_variable>
 
-#include <stdexcept>
-#include <iostream>
 #include <list>
-#include <vector>
+#include <optional>
 
 // Simple thread-safe queue with maximal size based on std::list<>::splice().
 //
@@ -34,9 +32,10 @@ class ThreadSafeQueue
 {
 private:
     // The current size.
-    size_t currentSize;
+    size_t currentSize = 0, popw = 0;
+	bool closed = false;
     // The condition variables to use for pushing/popping.
-    std::condition_variable cvPush, cvPop;
+    std::condition_variable cvPop;
     // The mutex for locking the queue.
     std::mutex mutex;
     // The list that the queue is implemented with.
@@ -44,7 +43,7 @@ private:
 public:
 
     // Initialize the queue with a maximal size.
-    explicit ThreadSafeQueue() : currentSize(0){}
+    explicit ThreadSafeQueue(){}
 
     // Push v to queue.  Blocks if queue is full.
     void push(T const & v)
@@ -91,25 +90,37 @@ public:
     // Pop value from queue and write to v.
     //
     // If this succeeds, OK is returned.  CLOSED is returned if the queue is empty and was closed.
-    T pop()
+    std::optional<T> pop()
     {
         decltype(list) tmpList;
 
         // Pop into tmpList which is finally written out.
         {
             std::unique_lock<std::mutex> lock(mutex);
+			popw++;
 
             // If there is no item then we wait until there is one.
-            while (list.empty())
+            while(list.empty() && !closed)
                 cvPop.wait(lock);
+			if(closed){
+				popw--;
+				return std::nullopt;
+			}
 
             // If we reach here then there is an item, get it.
             currentSize -= 1;
             tmpList.splice(tmpList.begin(), list, list.begin());
-            // Wake up one pushing thread.
-            cvPush.notify_one();
+			popw--;
         }
 
         return tmpList.front();
     }
+
+	void close(){
+		if(closed) return;
+		std::unique_lock<std::mutex> lock(mutex);
+		closed = true;
+		cvPop.notify_all();
+	}
+
 };

@@ -224,8 +224,8 @@ class Yengine {
 			}
 		}
 		void threadwork(){
-			while(true){ //TODO !closed
-				threado(work.pop());
+			while(auto w = work.pop()){ //TODO !closed
+				threado(*w);
 			}
 		}
 };
