@@ -29,10 +29,10 @@ template<typename T> class IdentityGenerator : public AGenerator<T> {
 	public:
 		IdentityGenerator(std::shared_ptr<Future<T>> awa) : w(awa) {}
 		bool done() const { return reqd && w->state() == FutureState::Completed; }
-		std::variant<std::shared_ptr<FutureBase>, T> resume([[maybe_unused]] const Yengine* engine){
-			if(w->state() == FutureState::Completed) return *(w->result());
+		std::variant<std::shared_ptr<FutureBase>, T*> resume([[maybe_unused]] const Yengine* engine){
+			if(w->state() == FutureState::Completed) return new T(**(w->result()));
 			if((reqd = !reqd)) return w;
-			else return *(w->result());
+			else return new T(**(w->result()));
 		}
 };
 
@@ -101,6 +101,7 @@ class Yengine {
 		}
 		/**
 		 * @param f @ref future to map
+		 * @param map `(ref in: U) -> V` function taking a reference to input type thing and producing (on heap!) output type thing
 		 * @returns @ref
 		 */
 		template<typename V, typename U, typename F> std::shared_ptr<Future<V>> then(std::shared_ptr<Future<U>> f, F map){
