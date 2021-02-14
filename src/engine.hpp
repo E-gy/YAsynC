@@ -20,6 +20,15 @@ template<typename T> class FutureG : public Future<T> {
 		std::optional<something<T>> result(){ return val; }
 };
 
+/**
+ * Transforms a generator into a future
+ * @param gen the generator
+ * @returns future
+ */ 
+template<typename T> std::shared_ptr<Future<T>> defer(std::shared_ptr<AGenerator<T>> gen){
+	return std::shared_ptr<Future<T>>(new FutureG<T>(gen));
+}
+
 template<typename T> class IdentityGenerator : public AGenerator<T> {
 	std::shared_ptr<Future<T>> w;
 	bool reqd = false;
@@ -88,6 +97,34 @@ template<typename V, typename U, typename F> class ChainingWrappingGenerator : p
 		}
 };
 
+template <typename T> struct _typed{};
+template <typename V, typename U, typename F> std::shared_ptr<Future<V>> then_spec(std::shared_ptr<Future<U>> f, F map, _typed<V>){
+	return defer(std::shared_ptr<AGenerator<V>>(new ChainingGenerator<V, U, F>(f, map)));
+}
+template <typename V, typename U, typename F> std::shared_ptr<Future<V>> then_spec(std::shared_ptr<Future<U>> f, F map, _typed<std::shared_ptr<Future<V>>>){
+	return defer(std::shared_ptr<AGenerator<V>>(new ChainingWrappingGenerator<V, U, F>(f, map)));
+}
+
+/**
+ * Transforms future value(s) by (a)synchronous function
+ * @param f @ref future to map
+ * @param map `(ref in: U) -> V|Future<V>` function taking a reference to input type thing and producing output type thing or future
+ * @returns @ref
+ */
+template<typename U, typename F> auto then(std::shared_ptr<Future<U>> f, F map){
+	using V = std::decay_t<decltype(map(*(f->result())))>;
+	return then_spec(f, map, _typed<V>{});
+}
+
+/**
+ * @see then but with manual type parametrization
+ */
+template<typename V, typename U, typename F> std::shared_ptr<Future<V>> them(std::shared_ptr<Future<U>> f, F map){
+	using t_rt = std::decay_t<decltype(map(*(f->result())))>;
+	if constexpr (std::is_convertible<t_rt, std::shared_ptr<FutureBase>>::value) return defer(std::shared_ptr<AGenerator<V>>(new ChainingWrappingGenerator<V, U, F>(f, map)));
+	else return defer(std::shared_ptr<AGenerator<V>>(new ChainingGenerator<V, U, F>(f, map)));
+}
+
 class Yengine {
 	/**
 	 * Queue<FutureG<?>>
@@ -99,14 +136,6 @@ class Yengine {
 	std::unordered_map<std::shared_ptr<FutureBase>, std::shared_ptr<FutureBase>> notifications;
 	public:
 		Yengine(unsigned threads);
-		/**
-		 * Transforms a generator into a future on this engine
-		 * @param gen the generator
-		 * @returns future
-		 */ 
-		template<typename T> std::shared_ptr<Future<T>> defer(std::shared_ptr<AGenerator<T>> gen){
-			return std::shared_ptr<Future<T>>(new FutureG<T>(gen));
-		}
 		/**
 		 * Resumes parallel yield of the future
 		 * @param f future to execute
@@ -136,22 +165,6 @@ class Yengine {
 				notifiAdd(redir, *noti);
 				execute(redir);
 			}
-		}
-		/**
-		 * @param f @ref future to map
-		 * @param map `(ref in: U) -> V` function taking a reference to input type thing and producing (on heap!) output type thing
-		 * @returns @ref
-		 */
-		template<typename V, typename U, typename F> std::shared_ptr<Future<V>> then(std::shared_ptr<Future<U>> f, F map){
-			return defer(std::shared_ptr<AGenerator<V>>(new ChainingGenerator<V, U, F>(f, map)));
-		}
-		/**
-		 * @param f @ref future to map
-		 * @param map `(ref in: U) -> Future<V>` function taking a reference to input type thing and producing (on heap!) output type thing
-		 * @returns @ref
-		 */
-		template<typename V, typename U, typename F> std::shared_ptr<Future<V>> thena(std::shared_ptr<Future<U>> f, F map){
-			return defer(std::shared_ptr<AGenerator<V>>(new ChainingWrappingGenerator<V, U, F>(f, map)));
 		}
 	private:
 		std::mutex notificationsLock;
