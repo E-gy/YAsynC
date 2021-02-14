@@ -138,8 +138,10 @@ class Yengine {
 	 * Future → Future
 	 */
 	std::unordered_map<std::shared_ptr<FutureBase>, std::shared_ptr<FutureBase>> notifications;
+	unsigned workers;
 	public:
 		Yengine(unsigned threads);
+		void wle();
 		/**
 		 * Resumes parallel yield of the future
 		 * @param f future to execute
@@ -174,6 +176,7 @@ class Yengine {
 			}
 		}
 	private:
+		std::condition_variable condWLE;
 		std::mutex notificationsLock;
 		void notifiAdd(std::shared_ptr<FutureBase> k, std::shared_ptr<FutureBase> v){
 			std::unique_lock lock(notificationsLock);
@@ -185,6 +188,7 @@ class Yengine {
 			if(naut == notifications.end()) return std::nullopt;
 			auto ret = naut->second;
 			notifications.erase(naut);
+			if(notifications.empty()) condWLE.notify_all();
 			return ret;
 		}
 		void threado(std::shared_ptr<FutureBase> task){

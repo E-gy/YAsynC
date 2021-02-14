@@ -41,9 +41,16 @@ private:
     // The list that the queue is implemented with.
     std::list<T> list;
 public:
+	std::condition_variable* cvIdle = nullptr;
+	unsigned thresIdle = 0;
 
     // Initialize the queue with a maximal size.
     explicit ThreadSafeQueue(){}
+
+	unsigned currentIdle(){
+		std::unique_lock<std::mutex> lock(mutex);
+		return popw;
+	}
 
     // Push v to queue.  Blocks if queue is full.
     void push(T const & v)
@@ -100,8 +107,10 @@ public:
 			popw++;
 
             // If there is no item then we wait until there is one.
-            while(list.empty() && !closed)
+            while(list.empty() && !closed){
+				if(cvIdle && thresIdle && popw >= thresIdle) cvIdle->notify_all();
                 cvPop.wait(lock);
+			}
 			if(closed){
 				popw--;
 				return std::nullopt;
