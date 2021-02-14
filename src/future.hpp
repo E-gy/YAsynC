@@ -3,6 +3,8 @@
 #include <optional>
 #include "something.hpp"
 
+namespace yasync {
+
 enum class FutureState : unsigned int {
 	Suspended, Queued, Running, Awaiting, Completed
 };
@@ -28,3 +30,5 @@ template<typename T> class Future : public FutureBase {
 		 */
 		virtual std::optional<something<T>> result() = 0;
 };
+
+}

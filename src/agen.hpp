@@ -4,6 +4,8 @@
 #include <memory>
 #include "something.hpp"
 
+namespace yasync {
+
 class Yengine;
 class FutureBase;
 
@@ -30,3 +32,5 @@ template<typename R> class AGenerator {
 		 */
 		virtual std::variant<std::shared_ptr<FutureBase>, something<R>> resume(const Yengine* engine) = 0;
 };
+
+}

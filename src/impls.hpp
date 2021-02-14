@@ -3,6 +3,11 @@
 #include "agen.hpp"
 #include "future.hpp"
 
+#include <thread>
+#include "engine.hpp"
+
+namespace yasync {
+
 class RangeGenerator : public AGenerator<int> {
 	int s, e;
 	int c;
@@ -11,9 +16,6 @@ class RangeGenerator : public AGenerator<int> {
 		bool done() const;
 		std::variant<std::shared_ptr<FutureBase>, something<int>> resume(const Yengine* eng);
 };
-
-#include <thread>
-#include "engine.hpp"
 
 /*class UnFuture : public Future<void> {
 	public:
@@ -43,4 +45,6 @@ template<typename T> std::shared_ptr<Future<T>> asyncSleep(Yengine* engine, unsi
 	}, f, something<T>(ret));
 	th.detach();
 	return f;
+}
+
 }

@@ -10,6 +10,8 @@
 #include "future.hpp"
 #include "threadsafequeue.hpp"
 
+namespace yasync {
+
 template<typename T> class FutureG : public Future<T> {
 	public:
 		std::shared_ptr<AGenerator<T>> gen;
@@ -233,3 +235,5 @@ class Yengine {
 			}
 		}
 };
+
+}

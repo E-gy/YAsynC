@@ -2,6 +2,8 @@
 
 #include <thread>
 
+namespace yasync {
+
 Yengine::Yengine(unsigned threads) : workers(threads) {
 	work.cvIdle = &condWLE;
 	work.thresIdle = workers;
@@ -17,4 +19,6 @@ void Yengine::wle(){
 		while(work.currentIdle() < work.thresIdle || !notifications.empty()) condWLE.wait(lock);
 	}
 	work.close();
+}
+
 }
