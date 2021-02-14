@@ -45,6 +45,49 @@ template<typename V, typename U, typename F> class ChainingGenerator : public AG
 		}
 };
 
+template<typename V, typename U, typename F> class ChainingWrappingGenerator : public AGenerator<V> {
+	enum class State {
+		I, A0, A1r, A1, Fi
+	};
+	State state = State::I;
+	std::shared_ptr<Future<U>> awa;
+	std::optional<std::shared_ptr<Future<V>>> nxt = std::nullopt;
+	F gf;
+	public:
+		ChainingWrappingGenerator(std::shared_ptr<Future<U>> w, F f) : awa(w), gf(f) {}
+		bool done() const { return state == State::Fi; }
+		std::variant<std::shared_ptr<FutureBase>, something<V>> resume([[maybe_unused]] const Yengine* engine){
+			switch(state){
+				case State::I:
+					state = State::A0;
+					return awa;
+				case State::A0: {
+					std::shared_ptr<Future<V>> f1 = gf(*(awa->result()));
+					nxt = f1;
+					[[fallthrough]];
+				}
+				case State::A1r:
+					state = State::A1;
+					return *nxt;
+				case State::A1: {
+					auto f1 = *nxt;
+					if(f1->state() == FutureState::Completed)
+						if(awa->state() == FutureState::Completed) state = State::Fi;
+						else {
+							state = State::I;
+							nxt = std::nullopt;
+						}
+					else state = State::A1r;
+					return *(f1->result());
+				}
+				case State::Fi:
+					return *((*nxt)->result());
+				default: //never
+					return awa;
+			}
+		}
+};
+
 class Yengine {
 	/**
 	 * Queue<FutureG<?>>
@@ -101,6 +144,14 @@ class Yengine {
 		 */
 		template<typename V, typename U, typename F> std::shared_ptr<Future<V>> then(std::shared_ptr<Future<U>> f, F map){
 			return defer(std::shared_ptr<AGenerator<V>>(new ChainingGenerator<V, U, F>(f, map)));
+		}
+		/**
+		 * @param f @ref future to map
+		 * @param map `(ref in: U) -> Future<V>` function taking a reference to input type thing and producing (on heap!) output type thing
+		 * @returns @ref
+		 */
+		template<typename V, typename U, typename F> std::shared_ptr<Future<V>> thena(std::shared_ptr<Future<U>> f, F map){
+			return defer(std::shared_ptr<AGenerator<V>>(new ChainingWrappingGenerator<V, U, F>(f, map)));
 		}
 	private:
 		std::mutex notificationsLock;
