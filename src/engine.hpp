@@ -147,9 +147,9 @@ class Yengine {
 						return;
 				}
 			} else {
-				//auto v = std::get<void*>(g);
+				auto v = std::get<void*>(g);
 				gent->s = gent->gen->done() ? FutureState::Completed : FutureState::Suspended;
-				// gent->val = std::optional(v);
+				gent->val = std::optional(v);
 				//#BeLazy: Whether we're done or not, drop from notifications. If we're done, well that's it. If we aren't, someone up in the pipeline will await for us at some point, setting up the notifications once again.
 				if(auto naut = notifiDrop(task)) task = *naut; //Proceed up the await chain immediately
 				else return;
