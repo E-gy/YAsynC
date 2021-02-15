@@ -12,12 +12,12 @@
 
 namespace yasync {
 
-template<typename T> class FutureG : public Future<T> {
+template<typename T> class FutureG : public IFutureT<T> {
 	public:
-		std::shared_ptr<AGenerator<T>> gen;
+		Generator<T> gen;
 		FutureState s = FutureState::Suspended;
 		std::optional<something<T>> val;
-		FutureG(std::shared_ptr<AGenerator<T>> g) : gen(g) {}
+		FutureG(Generator<T> g) : gen(g) {}
 		FutureState state(){ return s; }
 		std::optional<something<T>> result(){ return val; }
 };
@@ -27,53 +27,53 @@ template<typename T> class FutureG : public Future<T> {
  * @param gen the generator
  * @returns future
  */ 
-template<typename T> std::shared_ptr<Future<T>> defer(std::shared_ptr<AGenerator<T>> gen){
-	return std::shared_ptr<Future<T>>(new FutureG<T>(gen));
+template<typename T> Future<T> defer(Generator<T> gen){
+	return Future<T>(new FutureG<T>(gen));
 }
 
-template<typename T> class IdentityGenerator : public AGenerator<T> {
-	std::shared_ptr<Future<T>> w;
+template<typename T> class IdentityGenerator : public IGeneratorT<T> {
+	Future<T> w;
 	bool reqd = false;
 	public:
-		IdentityGenerator(std::shared_ptr<Future<T>> awa) : w(awa) {}
+		IdentityGenerator(Future<T> awa) : w(awa) {}
 		bool done() const { return reqd && w->state() == FutureState::Completed; }
-		std::variant<std::shared_ptr<FutureBase>, something<T>> resume([[maybe_unused]] const Yengine* engine){
+		std::variant<AFuture, something<T>> resume([[maybe_unused]] const Yengine* engine){
 			if(w->state() == FutureState::Completed || !(reqd = !reqd)) return something<T>(*(w->result()));
 			else return w;
 		}
 };
 
-template<typename V, typename U, typename F> class ChainingGenerator : public AGenerator<V> {
-	std::shared_ptr<Future<U>> w;
+template<typename V, typename U, typename F> class ChainingGenerator : public IGeneratorT<V> {
+	Future<U> w;
 	bool reqd = false;
 	F f;
 	public:
-		ChainingGenerator(std::shared_ptr<Future<U>> awa, F map) : w(awa), f(map) {}
+		ChainingGenerator(Future<U> awa, F map) : w(awa), f(map) {}
 		bool done() const { return reqd && w->state() == FutureState::Completed; }
-		std::variant<std::shared_ptr<FutureBase>, something<V>> resume([[maybe_unused]] const Yengine* engine){
+		std::variant<AFuture, something<V>> resume([[maybe_unused]] const Yengine* engine){
 			if(w->state() == FutureState::Completed || !(reqd = !reqd)) return something<V>(f(*(w->result())));
 			else return w;
 		}
 };
 
-template<typename V, typename U, typename F> class ChainingWrappingGenerator : public AGenerator<V> {
+template<typename V, typename U, typename F> class ChainingWrappingGenerator : public IGeneratorT<V> {
 	enum class State {
 		I, A0, A1r, A1, Fi
 	};
 	State state = State::I;
-	std::shared_ptr<Future<U>> awa;
-	std::optional<std::shared_ptr<Future<V>>> nxt = std::nullopt;
+	Future<U> awa;
+	std::optional<Future<V>> nxt = std::nullopt;
 	F gf;
 	public:
-		ChainingWrappingGenerator(std::shared_ptr<Future<U>> w, F f) : awa(w), gf(f) {}
+		ChainingWrappingGenerator(Future<U> w, F f) : awa(w), gf(f) {}
 		bool done() const { return state == State::Fi; }
-		std::variant<std::shared_ptr<FutureBase>, something<V>> resume([[maybe_unused]] const Yengine* engine){
+		std::variant<AFuture, something<V>> resume([[maybe_unused]] const Yengine* engine){
 			switch(state){
 				case State::I:
 					state = State::A0;
 					return awa;
 				case State::A0: {
-					std::shared_ptr<Future<V>> f1 = gf(*(awa->result()));
+					Future<V> f1 = gf(*(awa->result()));
 					nxt = f1;
 					[[fallthrough]];
 				}
@@ -100,11 +100,11 @@ template<typename V, typename U, typename F> class ChainingWrappingGenerator : p
 };
 
 template <typename T> struct _typed{};
-template <typename V, typename U, typename F> std::shared_ptr<Future<V>> then_spec(std::shared_ptr<Future<U>> f, F map, _typed<V>){
-	return defer(std::shared_ptr<AGenerator<V>>(new ChainingGenerator<V, U, F>(f, map)));
+template <typename V, typename U, typename F> Future<V> then_spec(Future<U> f, F map, _typed<V>){
+	return defer(Generator<V>(new ChainingGenerator<V, U, F>(f, map)));
 }
-template <typename V, typename U, typename F> std::shared_ptr<Future<V>> then_spec(std::shared_ptr<Future<U>> f, F map, _typed<std::shared_ptr<Future<V>>>){
-	return defer(std::shared_ptr<AGenerator<V>>(new ChainingWrappingGenerator<V, U, F>(f, map)));
+template <typename V, typename U, typename F> Future<V> then_spec(Future<U> f, F map, _typed<Future<V>>){
+	return defer(Generator<V>(new ChainingWrappingGenerator<V, U, F>(f, map)));
 }
 
 /**
@@ -113,33 +113,33 @@ template <typename V, typename U, typename F> std::shared_ptr<Future<V>> then_sp
  * @param map `(ref in: U) -> V|Future<V>` function taking a reference to input type thing and producing output type thing or future
  * @returns @ref
  */
-template<typename U, typename F> auto then(std::shared_ptr<Future<U>> f, F map){
+template<typename U, typename F> auto then(Future<U> f, F map){
 	using V = std::decay_t<decltype(map(*(f->result())))>;
 	return then_spec(f, map, _typed<V>{});
 }
 
-template<typename U, typename F> auto operator>>(std::shared_ptr<Future<U>> f, F map){
+template<typename U, typename F> auto operator>>(Future<U> f, F map){
 	return then(f, map);
 }
 
 /**
  * @see then but with manual type parametrization
  */
-template<typename V, typename U, typename F> std::shared_ptr<Future<V>> them(std::shared_ptr<Future<U>> f, F map){
+template<typename V, typename U, typename F> Future<V> them(Future<U> f, F map){
 	using t_rt = std::decay_t<decltype(map(*(f->result())))>;
-	if constexpr (std::is_convertible<t_rt, std::shared_ptr<FutureBase>>::value) return defer(std::shared_ptr<AGenerator<V>>(new ChainingWrappingGenerator<V, U, F>(f, map)));
-	else return defer(std::shared_ptr<AGenerator<V>>(new ChainingGenerator<V, U, F>(f, map)));
+	if constexpr (std::is_convertible<t_rt, AFuture>::value) return defer(Generator<V>(new ChainingWrappingGenerator<V, U, F>(f, map)));
+	else return defer(Generator<V>(new ChainingGenerator<V, U, F>(f, map)));
 }
 
 class Yengine {
 	/**
 	 * Queue<FutureG<?>>
 	 */
-	ThreadSafeQueue<std::shared_ptr<FutureBase>> work;
+	ThreadSafeQueue<AFuture> work;
 	/**
 	 * Future → Future
 	 */
-	std::unordered_map<std::shared_ptr<FutureBase>, std::shared_ptr<FutureBase>> notifications;
+	std::unordered_map<AFuture, AFuture> notifications;
 	unsigned workers;
 	public:
 		Yengine(unsigned threads);
@@ -149,13 +149,13 @@ class Yengine {
 		 * @param f future to execute
 		 * @returns f
 		 */ 
-		template<typename T> std::shared_ptr<Future<T>> execute(std::shared_ptr<Future<T>> f){
+		template<typename T> Future<T> execute(Future<T> f){
 			auto ft = std::dynamic_pointer_cast<FutureG<T>>(f);
 			ft->s = FutureState::Queued;
 			work.push(f);
 			return f;
 		}
-		template<typename T> auto operator<<=(std::shared_ptr<Future<T>> f){
+		template<typename T> auto operator<<=(Future<T> f){
 			return execute(f);
 		}
 		/**
@@ -163,16 +163,16 @@ class Yengine {
 		 * @param gen the generator
 		 * @returns future
 		 */ 
-		template<typename T> std::shared_ptr<Future<T>> launch(std::shared_ptr<AGenerator<T>> gen){
+		template<typename T> Future<T> launch(Generator<T> gen){
 			return execute(defer(gen));
 		}
 		/**
 		 * Notifies the engine of completion of an external future.
 		 * Returns almost immediately - actual processing of the notification will happen internally.
 		 */
-		template<typename T> void notify(std::shared_ptr<Future<T>> f){
+		template<typename T> void notify(Future<T> f){
 			if(auto noti = notifiDrop(f)){
-				auto redir = defer(std::shared_ptr<AGenerator<T>>(new IdentityGenerator<T>(f)));
+				auto redir = defer(Generator<T>(new IdentityGenerator<T>(f)));
 				notifiAdd(redir, *noti);
 				execute(redir);
 			}
@@ -180,11 +180,11 @@ class Yengine {
 	private:
 		std::condition_variable condWLE;
 		std::mutex notificationsLock;
-		void notifiAdd(std::shared_ptr<FutureBase> k, std::shared_ptr<FutureBase> v){
+		void notifiAdd(AFuture k, AFuture v){
 			std::unique_lock lock(notificationsLock);
 			notifications[k] = v;
 		}
-		std::optional<std::shared_ptr<FutureBase>> notifiDrop(std::shared_ptr<FutureBase> k){
+		std::optional<AFuture> notifiDrop(AFuture k){
 			std::unique_lock lock(notificationsLock);
 			auto naut = notifications.find(k);
 			if(naut == notifications.end()) return std::nullopt;
@@ -193,7 +193,7 @@ class Yengine {
 			if(notifications.empty()) condWLE.notify_all();
 			return ret;
 		}
-		void threado(std::shared_ptr<FutureBase> task){
+		void threado(AFuture task){
 			if(task->state() > FutureState::Running) return; //Only suspended tasks are resumeable
 			//cont:
 			while(true)
@@ -201,7 +201,7 @@ class Yengine {
 			auto gent = (FutureG<void*>*) task.get();
 			gent->s = FutureState::Running;
 			auto g = gent->gen->resume(this);
-			if(auto awa = std::get_if<std::shared_ptr<FutureBase>>(&g)){
+			if(auto awa = std::get_if<AFuture>(&g)){
 				switch((*awa)->state()){
 					case FutureState::Completed:
 						// goto cont;

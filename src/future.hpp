@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <memory>
 #include "something.hpp"
 
 namespace yasync {
@@ -9,7 +10,7 @@ enum class FutureState : unsigned int {
 	Suspended, Queued, Running, Awaiting, Completed
 };
 
-class FutureBase {
+class IFuture {
 	public:
 		/**
 		 * Acquires the state of the future.
@@ -21,7 +22,7 @@ class FutureBase {
 		virtual FutureState state() = 0;
 };
 
-template<typename T> class Future : public FutureBase {
+template<typename T> class IFutureT : public IFuture {
 	public:
 		/**
 		 * The future owns the result, always.
@@ -30,5 +31,8 @@ template<typename T> class Future : public FutureBase {
 		 */
 		virtual std::optional<something<T>> result() = 0;
 };
+
+using AFuture = std::shared_ptr<IFuture>;
+template<typename T> using Future = std::shared_ptr<IFutureT<T>>;
 
 }

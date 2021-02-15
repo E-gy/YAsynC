@@ -3,11 +3,11 @@
 #include <variant>
 #include <memory>
 #include "something.hpp"
+#include "future.hpp"
 
 namespace yasync {
 
 class Yengine;
-class FutureBase;
 
 /**
  * Generic asynchronous generator interface.
@@ -15,7 +15,7 @@ class FutureBase;
  * - the generator can transition only from `!done` into `done` state and only on a producing [ret none] `resume`.
  * - `resume` will not be called again after the generator goes into `done` state
  */
-template<typename R> class AGenerator {
+template<typename T> class IGeneratorT {
 	public:
 		/**
 		 * @returns whether the generation has finished
@@ -30,7 +30,9 @@ template<typename R> class AGenerator {
 		 * @param engine @ref async engine to launch tasks in parallel
 		 * @returns @produces the next value if ready, the future this generator is awaiting for otherwise
 		 */
-		virtual std::variant<std::shared_ptr<FutureBase>, something<R>> resume(const Yengine* engine) = 0;
+		virtual std::variant<AFuture, something<T>> resume(const Yengine* engine) = 0;
 };
+
+template<typename T> using Generator = std::shared_ptr<IGeneratorT<T>>;
 
 }

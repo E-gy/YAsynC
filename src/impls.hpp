@@ -8,13 +8,13 @@
 
 namespace yasync {
 
-class RangeGenerator : public AGenerator<int> {
+class RangeGenerator : public IGeneratorT<int> {
 	int s, e;
 	int c;
 	public:
 		RangeGenerator(int start, int end) : s(start), e(end), c(s-1) {}
 		bool done() const;
-		std::variant<std::shared_ptr<FutureBase>, something<int>> resume(const Yengine* eng);
+		std::variant<AFuture, something<int>> resume(const Yengine* eng);
 };
 
 /*class UnFuture : public Future<void> {
@@ -26,7 +26,7 @@ class RangeGenerator : public AGenerator<int> {
 		}
 };*/
 
-template<typename T> class OutsideFuture : public Future<T> {
+template<typename T> class OutsideFuture : public IFutureT<T> {
 	public:
 		OutsideFuture(){}
 		FutureState s = FutureState::Running;
@@ -35,13 +35,13 @@ template<typename T> class OutsideFuture : public Future<T> {
 		std::optional<something<T>> result(){ return r; }
 };
 
-template<typename T> std::shared_ptr<Future<T>> asyncSleep(Yengine* engine, unsigned ms, T ret){
+template<typename T> Future<T> asyncSleep(Yengine* engine, unsigned ms, T ret){
 	std::shared_ptr<OutsideFuture<T>> f(new OutsideFuture<T>());
 	std::thread th([engine, ms](std::shared_ptr<OutsideFuture<T>> f, something<T> rt){
 		std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 		f->s = FutureState::Completed;
 		f->r.emplace(rt);
-		engine->notify(std::dynamic_pointer_cast<Future<T>>(f));
+		engine->notify(std::dynamic_pointer_cast<IFutureT<T>>(f));
 	}, f, something<T>(ret));
 	th.detach();
 	return f;
