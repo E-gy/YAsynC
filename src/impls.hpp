@@ -35,6 +35,13 @@ template<typename T> class OutsideFuture : public IFutureT<T> {
 		std::optional<something<T>> result(){ return r; }
 };
 
+template<typename T> Future<T> completed(T t){
+	std::shared_ptr<OutsideFuture<T>> vf(new OutsideFuture<T>());
+	vf->s = FutureState::Completed;
+	vf->r.emplace(something<T>(std::move(t)));
+	return vf;
+} 
+
 template<typename T> Future<T> asyncSleep(Yengine* engine, unsigned ms, T ret){
 	std::shared_ptr<OutsideFuture<T>> f(new OutsideFuture<T>());
 	std::thread th([engine, ms](std::shared_ptr<OutsideFuture<T>> f, something<T> rt){
