@@ -39,8 +39,10 @@ template<typename T> class IdentityGenerator : public IGeneratorT<T> {
 		IdentityGenerator(Future<T> awa) : w(awa) {}
 		bool done() const { return reqd && w->state() == FutureState::Completed; }
 		std::variant<AFuture, something<T>> resume([[maybe_unused]] const Yengine* engine){
-			if(w->state() == FutureState::Completed || !(reqd = !reqd)) return something<T>(*(w->result()));
-			else return w;
+			if(w->state() == FutureState::Completed || !(reqd = !reqd)){
+				if constexpr (std::is_same<T, void>::value) return something<void>();
+				else return something<T>(*(w->result()));
+			} else return w;
 		}
 };
 
@@ -52,8 +54,12 @@ template<typename V, typename U, typename F> class ChainingGenerator : public IG
 		ChainingGenerator(Future<U> awa, F map) : w(awa), f(map) {}
 		bool done() const { return reqd && w->state() == FutureState::Completed; }
 		std::variant<AFuture, something<V>> resume([[maybe_unused]] const Yengine* engine){
-			if(w->state() == FutureState::Completed || !(reqd = !reqd)) return something<V>(f(*(w->result())));
-			else return w;
+			if(w->state() == FutureState::Completed || !(reqd = !reqd)){
+				if constexpr (std::is_same<V, void>::value){
+					f(*(w->result()));
+					return something<void>();
+				} else return something<V>(f(*(w->result())));
+			} else return w;
 		}
 };
 
