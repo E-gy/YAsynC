@@ -28,6 +28,14 @@ IOYengine::~IOYengine(){
 }
 Yengine* IOYengine::yengine() const { return engine; }
 
+void PrintLastError(DWORD lerr){
+	LPSTR err;
+	FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS, NULL, lerr, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&err, 0, NULL);
+	std::cerr << "Uh oh - " << err;
+	LocalFree(err);
+	throw std::runtime_error("uh oh :("); //FIXME no! Use. Results.
+}
+
 struct IOCompletionInfo {
 	BOOL status;
 	DWORD transferred;
@@ -64,13 +72,6 @@ class FileResource : public IAIOResource {
 		}
 		auto setSelf(std::shared_ptr<FileResource> self){
 			return slf = self;
-		}
-		void PrintLastError(DWORD lerr){
-			LPSTR err;
-			FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS, NULL, lerr, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&err, 0, NULL);
-			std::cerr << "Uh oh - " << err;
-			LocalFree(err);
-			throw std::runtime_error("uh oh :("); //FIXME no! Use. Results.
 		}
 		Future<std::vector<char>> read(unsigned bytes){
 			//self.get() == this   exists to memory-lock dangling IO resource to this lambda generator
