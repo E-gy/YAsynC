@@ -21,7 +21,6 @@ constexpr size_t DEFAULT_BUFFER_SIZE = 4096;
 constexpr unsigned COMPLETION_KEY_SHUTDOWN = 1;
 constexpr unsigned COMPLETION_KEY_IO = 2;
 #else
-constexpr unsigned EPOLL_MAX_EVENTS = 64;
 #endif
 
 namespace yasync::io {
@@ -281,17 +280,17 @@ void IOYengine::iothreadwork(){
 			engine->notify(std::dynamic_pointer_cast<IFutureT<IOCompletionInfo>>(resource->engif));
 		}
 		#else
-		::epoll_event events[EPOLL_MAX_EVENTS];
-		auto es = ::epoll_wait(ioEpoll, events, EPOLL_MAX_EVENTS, -1);
-		for(int i = 0; i < es; i++)
-			if(events[i].data.ptr == this) return;
-			else {
-				auto resource = reinterpret_cast<FileResource*>(events[i].data.ptr);
-				resource->engif->s = FutureState::Completed;
-				auto eveid = events[i].events;
-				resource->engif->r.emplace(eveid);
-				engine->notify(std::dynamic_pointer_cast<IFutureT<void>>(resource->engif));
-			}
+		::epoll_event event;
+		auto es = ::epoll_wait(ioEpoll, &event, 1, -1);
+		if(es < 0) PrintLastError("Epoll wait failed");
+		else if(es == 0 || event.data.ptr == this) break;
+		else {
+			auto resource = reinterpret_cast<FileResource*>(event.data.ptr);
+			resource->engif->s = FutureState::Completed;
+			auto eveid = event.events;
+			resource->engif->r.emplace(eveid);
+			engine->notify(std::dynamic_pointer_cast<IFutureT<void>>(resource->engif));
+		}
 		#endif
 	}
 }
