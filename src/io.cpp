@@ -177,4 +177,163 @@ Resource IOYengine::fileOpenWrite(const std::string& path){
 
 }
 
+#else
+
+#include <sys/epoll.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <stdio.h> //for perror reporting
+#include <iostream>
+
+namespace yasync::io {
+
+constexpr size_t DEFAULT_BUFFER_SIZE = 4096;
+constexpr unsigned EPOLL_MAX_EVENTS = 64;
+
+IOYengine::IOYengine(Yengine* e) : engine(e) {
+	ioEpoll = ::epoll_create1(EPOLL_CLOEXEC);
+	if(ioEpoll < 0) throw std::runtime_error("Initalizing EPoll failed");
+	fd_t pipe2[2];
+	if(::pipe2(pipe2, O_CLOEXEC | O_NONBLOCK)) throw std::runtime_error("Initalizing close down pipe failed");
+	::epoll_event epm;
+	epm.events = EPOLLHUP | EPOLLERR;
+	epm.data.ptr = this;
+	if(::epoll_ctl(ioEpoll, EPOLL_CTL_ADD, cfdStopReceive, &epm)) throw std::runtime_error("Initalizing close down pipe epoll failed");
+	std::thread th([this](){ this->iothreadwork(); });
+	th.detach();
+}
+
+IOYengine::~IOYengine(){
+	close(cfdStopSend); //sends EPOLLHUP to receiving end
+	close(cfdStopReceive);
+	//hmmm...
+	close(ioEpoll);
+}
+
+static void PrintLastError(const std::string& errm){
+	perror(errm.c_str());
+	throw std::runtime_error(errm); //FIXME no! Use. Results.
+}
+
+class FileResource : public IAIOResource {
+	enum class Mode {
+		Read, Write
+	};
+	std::weak_ptr<FileResource> slf;
+	IOYengine* engine;
+	Mode mode;
+	fd_t file;
+	std::array<char, DEFAULT_BUFFER_SIZE> buffer;
+	std::shared_ptr<OutsideFuture<int>> engif;
+	bool reged = false;
+	bool lazyEpollReg(){
+		if(reged) return false;
+		::epoll_event epm;
+		epm.events = mode == Mode::Write ? EPOLLOUT : EPOLLIN;
+		epm.data.ptr = this;
+		if(::epoll_ctl(engine->ioEpoll, EPOLL_CTL_ADD, file, &epm)){
+			if(errno == EPERM){
+				//The file does not support non-blocking io :(
+				//That means that all r/w will succeed (and block). So we report ourselves ready for IO, and off to EOD we go!
+				engif->r.emplace(mode == Mode::Write ? EPOLLOUT : EPOLLIN);
+				engif->s = FutureState::Completed;
+				return !(reged = true);
+			} else PrintLastError("Register to epoll failed");
+		}
+		return reged = true;
+	}
+	public:
+		friend class IOYengine;
+		FileResource(IOYengine* e, Mode m, const std::string& path) : engine(e), mode(m), buffer(), engif(new OutsideFuture<int>()) {
+			file = open(path.c_str(), (mode == Mode::Write ? O_WRONLY | O_CREAT : O_RDONLY) | O_NONBLOCK | O_CLOEXEC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
+			if(file < 0) PrintLastError("Open file failed"); //FIXME no?
+		}
+		FileResource(const FileResource& cpy) = delete;
+		FileResource(FileResource&& mov) = delete;
+		~FileResource(){
+			if(file >= 0) close(file);
+		}
+		auto setSelf(std::shared_ptr<FileResource> self){
+			return slf = self;
+		}
+		Future<std::vector<char>> read(unsigned bytes){
+			return defer(lambdagen([this, self = slf.lock(), bytes]([[maybe_unused]] const Yengine* engine, bool& done, std::vector<char>& data) -> std::variant<AFuture, something<std::vector<char>>> {
+				if(done) return data;
+				if(lazyEpollReg()) return engif;
+				if(engif->s == FutureState::Completed){
+					int leve = *engif->r;
+					if(leve != EPOLLIN) PrintLastError("Epoll wrong event");
+					int transferred;
+					while((transferred = ::read(file, buffer.data(), bytes == 0 ? buffer.size() : std::min(buffer.size(), bytes - data.size()))) > 0){
+						data.insert(data.end(), buffer.begin(), buffer.begin()+transferred);
+						if(bytes > 0 && data.size() >= bytes){
+							done = true;
+							return data;
+						}
+					}
+					if(transferred == 0){
+						done = true;
+						return data;
+					}
+					if(errno != EWOULDBLOCK && errno != EAGAIN) PrintLastError("Read failed");
+				}
+				engif->s = FutureState::Running;
+				return engif;
+			}, std::vector<char>()));
+		}
+		Future<void> write(const std::vector<char>& data){
+			return defer(lambdagen([this, self = slf.lock()]([[maybe_unused]] const Yengine* engine, bool& done, std::vector<char>& data) -> std::variant<AFuture, something<void>> {
+				if(data.empty()) done = true;
+				if(done) return something<void>();
+				if(lazyEpollReg()) return engif;
+				if(engif->s == FutureState::Completed){
+					int leve = *engif->r;
+					if(leve != EPOLLOUT) PrintLastError("Epoll wrong event");
+					int transferred;
+					while((transferred = ::write(file, data.data(), data.size())) >= 0){
+						data.erase(data.begin(), data.begin()+transferred);
+						if(data.empty()){
+							done = true;
+							return something<void>();
+						}
+					}
+					if(errno != EWOULDBLOCK && errno != EAGAIN) PrintLastError("Write failed");
+				}
+				engif->s = FutureState::Running;
+				return engif;
+			}, std::move(data)));
+		}
+};
+
+void IOYengine::iothreadwork(){
+	while(true){
+		::epoll_event events[EPOLL_MAX_EVENTS];
+		auto es = ::epoll_wait(ioEpoll, events, EPOLL_MAX_EVENTS, -1);
+		for(int i = 0; i < es; i++)
+			if(events[i].data.ptr == this) return;
+			else {
+				auto resource = reinterpret_cast<FileResource*>(events[i].data.ptr);
+				resource->engif->s = FutureState::Completed;
+				auto eveid = events[i].events;
+				resource->engif->r.emplace(eveid);
+				engine->notify(std::dynamic_pointer_cast<IFutureT<void>>(resource->engif));
+			}
+	}
+}
+
+Resource IOYengine::fileOpenRead(const std::string& path){
+	std::shared_ptr<FileResource> r(new FileResource(this, FileResource::Mode::Read, path));
+	r->setSelf(r);
+	return r;
+}
+Resource IOYengine::fileOpenWrite(const std::string& path){
+	std::shared_ptr<FileResource> r(new FileResource(this, FileResource::Mode::Write, path));
+	r->setSelf(r);
+	return r;
+}
+
+}
+
 #endif

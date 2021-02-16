@@ -11,7 +11,7 @@
 //https://gist.github.com/abdul-sami/23e1321c550dc94a9558
 #include <windows.h>
 #else
-//TODO epoll
+using fd_t = int;
 #endif
 
 namespace yasync::io {
@@ -36,11 +36,14 @@ class IOYengine {
 		Resource fileOpenWrite(const std::string& path);
 		//TODO properly extendable for sockets
 	private:
+		friend class FileResource;
+		void iothreadwork();
 		#ifdef _WIN32
 		HANDLE ioCompletionPort;
-		friend class FileResource;
 		unsigned ioThreads = 1; //IO events are dispatched by notification to the engine
-		void iothreadwork();
+		#else
+		fd_t ioEpoll;
+		fd_t cfdStopSend, cfdStopReceive;
 		#endif
 };
 
