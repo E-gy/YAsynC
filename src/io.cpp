@@ -10,7 +10,7 @@
 
 namespace yasync::io {
 
-constexpr unsigned DEFAULT_BUFFER_SIZE = 4096;
+constexpr size_t DEFAULT_BUFFER_SIZE = 4096;
 constexpr unsigned COMPLETION_KEY_SHUTDOWN = 1;
 constexpr unsigned COMPLETION_KEY_IO = 2;
 
