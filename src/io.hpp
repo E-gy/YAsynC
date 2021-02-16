@@ -21,7 +21,7 @@ class IOYengine;
 class IAIOResource {
 	public:
 		virtual Future<std::vector<char>> read(unsigned bytes) = 0;
-		virtual Future<int> write(std::vector<char> data) = 0;
+		virtual Future<void> write(const std::vector<char>& data) = 0;
 };
 
 using Resource = std::shared_ptr<IAIOResource>; 

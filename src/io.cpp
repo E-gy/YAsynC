@@ -106,9 +106,31 @@ class FileResource : public IAIOResource {
 				return engif;
 			}, std::vector<char>()));
 		}
-		Future<int> write([[maybe_unused]] std::vector<char> data){
-			//TODO
-			return std::shared_ptr<OutsideFuture<int>>(new OutsideFuture<int>());
+		Future<void> write(const std::vector<char>& data){
+			return defer(lambdagen([this, self = slf.lock()]([[maybe_unused]] const Yengine* engine, bool& done, std::vector<char>& data) -> std::variant<AFuture, something<void>> {
+				if(data.empty()) done = true;
+				if(done) return something<void>();
+				if(engif->s == FutureState::Completed){
+					IOCompletionInfo result = *engif->r;
+					if(!result.status) PrintLastError(result.lerr);
+					else {
+						data.erase(data.begin(), data.begin()+result.transferred);
+						trixter.overlapped.Offset += result.transferred;
+						if(data.empty()){
+							done = true;
+							return something<void>();
+						}
+					}
+				}
+				engif->s = FutureState::Running;
+				DWORD transferred = 0;
+				while(WriteFile(file, data.data(), data.size(), &transferred, &trixter.overlapped)){
+					data.erase(data.begin(), data.begin()+transferred);
+					trixter.overlapped.Offset += transferred;
+				}
+				if(::GetLastError() != ERROR_IO_PENDING) PrintLastError(::GetLastError());
+				return engif;
+			}, std::move(data)));
 		}
 };
 
