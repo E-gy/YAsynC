@@ -20,7 +20,18 @@ namespace yasync::io {
 
 class IOYengine;
 
+#ifdef _WIN32
+struct IOCompletionInfo {
+	BOOL status;
+	DWORD transferred;
+	DWORD lerr;
+};
+#else
+using IOCompletionInfo = int;
+#endif
+
 class IAIOResource {
+	virtual void notify(IOCompletionInfo inf) = 0;
 	public:
 		virtual Future<std::vector<char>> read(unsigned bytes) = 0;
 		virtual Future<void> write(const std::vector<char>& data) = 0;

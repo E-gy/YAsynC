@@ -77,22 +77,17 @@ static void PrintLastError(const std::string& errm){
 }
 #endif
 
-#ifdef _WIN32
-struct IOCompletionInfo {
-	BOOL status;
-	DWORD transferred;
-	DWORD lerr;
-};
-#else
-using IOCompletionInfo = int;
-#endif
-
 class FileResource : public IAIOResource {
 	std::weak_ptr<FileResource> slf;
 	IOYengine* engine;
 	ResourceHandle file;
 	std::array<char, DEFAULT_BUFFER_SIZE> buffer;
 	std::shared_ptr<OutsideFuture<IOCompletionInfo>> engif;
+	void notify(IOCompletionInfo inf){
+		engif->r.emplace(inf);
+		engif->s = FutureState::Completed;
+		engine->engine->notify(std::dynamic_pointer_cast<IFutureT<IOCompletionInfo>>(engif));
+	}
 	#ifdef _WIN32
 	struct Trixter {
 		OVERLAPPED overlapped;
@@ -263,26 +258,15 @@ void IOYengine::iothreadwork(){
 		ULONG_PTR key;
 		LPOVERLAPPED overl;
 		inf.status = GetQueuedCompletionStatus(ioCompletionPort, &inf.transferred, &key, &overl, INFINITE);
+		inf.lerr = GetLastError();
 		if(key == COMPLETION_KEY_SHUTDOWN) break;
-		if(key == COMPLETION_KEY_IO){
-			inf.lerr = GetLastError();
-			auto resource = reinterpret_cast<FileResource::Trixter*>(overl)->cmon;
-			resource->engif->s = FutureState::Completed;
-			resource->engif->r.emplace(inf);
-			engine->notify(std::dynamic_pointer_cast<IFutureT<IOCompletionInfo>>(resource->engif));
-		}
+		if(key == COMPLETION_KEY_IO) reinterpret_cast<FileResource::Trixter*>(overl)->cmon->notify(inf);
 		#else
 		::epoll_event event;
 		auto es = ::epoll_wait(ioEpoll, &event, 1, -1);
 		if(es < 0) PrintLastError("Epoll wait failed");
 		else if(es == 0 || event.data.ptr == this) break;
-		else {
-			auto resource = reinterpret_cast<FileResource*>(event.data.ptr);
-			resource->engif->s = FutureState::Completed;
-			auto eveid = event.events;
-			resource->engif->r.emplace(eveid);
-			engine->notify(std::dynamic_pointer_cast<IFutureT<void>>(resource->engif));
-		}
+		else reinterpret_cast<FileResource*>(event.data.ptr)->notify(event.events);
 		#endif
 	}
 }
