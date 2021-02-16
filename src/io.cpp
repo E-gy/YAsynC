@@ -47,13 +47,12 @@ class FileResource : public IAIOResource {
 	IOYengine* engine;
 	Mode mode;
 	HANDLE file;
-	char* buffer;
+	std::array<char, DEFAULT_BUFFER_SIZE> buffer;
 	std::shared_ptr<OutsideFuture<IOCompletionInfo>> engif;
 	public:
 		friend class IOYengine;
-		FileResource(IOYengine* e, Mode m, const std::string& path) : engine(e), mode(m), engif(new OutsideFuture<IOCompletionInfo>()) {
+		FileResource(IOYengine* e, Mode m, const std::string& path) : engine(e), mode(m), buffer(), engif(new OutsideFuture<IOCompletionInfo>()) {
 			trixter.cmon = this;
-			buffer = reinterpret_cast<char*>(VirtualAlloc(NULL, DEFAULT_BUFFER_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
 			file = CreateFileA(path.c_str(), mode == Mode::Write ? GENERIC_WRITE : GENERIC_READ, 0, NULL, OPEN_ALWAYS, FILE_FLAG_OVERLAPPED/* | FILE_FLAG_NO_BUFFERING cf https://docs.microsoft.com/en-us/windows/win32/fileio/file-buffering?redirectedfrom=MSDN */, NULL);
 			if(file == INVALID_HANDLE_VALUE) throw std::runtime_error("CreateFile failed :("); //FIXME no?
 			CreateIoCompletionPort(file, e->ioCompletionPort, COMPLETION_KEY_IO, 0);
@@ -62,7 +61,6 @@ class FileResource : public IAIOResource {
 		FileResource(FileResource&& mov) = delete;
 		~FileResource(){
 			if(file != INVALID_HANDLE_VALUE) CloseHandle(file);
-			if(buffer) VirtualFree(buffer, 0, MEM_RELEASE);
 		}
 		auto setSelf(std::shared_ptr<FileResource> self){
 			return slf = self;
@@ -86,15 +84,15 @@ class FileResource : public IAIOResource {
 							return data;
 						} else PrintLastError(result.lerr);
 					} else {
-						data.insert(data.end(), buffer, buffer+result.transferred);
+						data.insert(data.end(), buffer.begin(), buffer.begin()+result.transferred);
 						trixter.overlapped.Offset += result.transferred;
 						if(bytes > 0 && (done = data.size() >= bytes)) return something<std::vector<char>>(data);
 					}
 				}
 				engif->s = FutureState::Running;
 				DWORD transferred = 0;
-				while(ReadFile(file, buffer, bytes == 0 ? DEFAULT_BUFFER_SIZE : std::min(DEFAULT_BUFFER_SIZE, bytes - data.size()), &transferred, &trixter.overlapped)){
-					data.insert(data.end(), buffer, buffer + transferred);
+				while(ReadFile(file, buffer.begin(), bytes == 0 ? buffer.size() : std::min(buffer.size(), bytes - data.size()), &transferred, &trixter.overlapped)){
+					data.insert(data.end(), buffer.begin(), buffer.begin() + transferred);
 					trixter.overlapped.Offset += transferred;
 					if(bytes > 0 && data.size() >= bytes) return something<std::vector<char>>(data);
 				}
