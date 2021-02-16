@@ -104,7 +104,6 @@ template<typename S> result<S, std::string> retSysError(const std::string& messa
 
 class FileResource : public IAIOResource {
 	std::weak_ptr<FileResource> slf;
-	IOYengine* engine;
 	ResourceHandle file;
 	std::array<char, DEFAULT_BUFFER_SIZE> buffer;
 	std::shared_ptr<OutsideFuture<IOCompletionInfo>> engif;
@@ -142,7 +141,7 @@ class FileResource : public IAIOResource {
 	#endif
 	public:
 		friend class IOYengine;
-		FileResource(IOYengine* e, ResourceHandle rh) : engine(e), file(rh), buffer(), engif(new OutsideFuture<IOCompletionInfo>()) {
+		FileResource(IOYengine* e, ResourceHandle rh) : IAIOResource(e), file(rh), buffer(), engif(new OutsideFuture<IOCompletionInfo>()) {
 			#ifdef _WIN32
 			CreateIoCompletionPort(file, e->ioCompletionPort, COMPLETION_KEY_IO, 0);
 			#else
@@ -160,7 +159,7 @@ class FileResource : public IAIOResource {
 		auto setSelf(std::shared_ptr<FileResource> self){
 			return slf = self;
 		}
-		Future<result<std::vector<char>, std::string>> read(unsigned bytes){
+		Future<result<std::vector<char>, std::string>> _read(size_t bytes){
 			engif->s = FutureState::Running;
 			//self.get() == this   exists to memory-lock dangling IO resource to this lambda generator
 			return defer(lambdagen([this, self = slf.lock(), bytes]([[maybe_unused]] const Yengine* engine, bool& done, std::vector<char>& data) -> std::variant<AFuture, something<result<std::vector<char>, std::string>>> {
@@ -227,7 +226,7 @@ class FileResource : public IAIOResource {
 				return engif;
 			}, std::vector<char>()));
 		}
-		Future<result<void, std::string>> write(const std::vector<char>& data){
+		Future<result<void, std::string>> _write(std::vector<char>&& data){
 			engif->s = FutureState::Running;
 			return defer(lambdagen([this, self = slf.lock()]([[maybe_unused]] const Yengine* engine, bool& done, std::vector<char>& data) -> std::variant<AFuture, something<result<void, std::string>>> {
 				if(data.empty()) done = true;
@@ -274,7 +273,7 @@ class FileResource : public IAIOResource {
 				#endif
 				engif->s = FutureState::Running;
 				return engif;
-			}, std::move(data)));
+			}, data));
 		}
 };
 
