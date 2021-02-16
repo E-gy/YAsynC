@@ -166,6 +166,7 @@ class FileResource : public IAIOResource {
 			return slf = self;
 		}
 		Future<std::vector<char>> read(unsigned bytes){
+			engif->s = FutureState::Running;
 			//self.get() == this   exists to memory-lock dangling IO resource to this lambda generator
 			return defer(lambdagen([this, self = slf.lock(), bytes]([[maybe_unused]] const Yengine* engine, bool& done, std::vector<char>& data) -> std::variant<AFuture, something<std::vector<char>>> {
 				if(done) return data;
@@ -228,6 +229,7 @@ class FileResource : public IAIOResource {
 			}, std::vector<char>()));
 		}
 		Future<void> write(const std::vector<char>& data){
+			engif->s = FutureState::Running;
 			return defer(lambdagen([this, self = slf.lock()]([[maybe_unused]] const Yengine* engine, bool& done, std::vector<char>& data) -> std::variant<AFuture, something<void>> {
 				if(data.empty()) done = true;
 				if(done) return something<void>();
