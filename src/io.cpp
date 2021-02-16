@@ -119,7 +119,7 @@ class FileResource : public IAIOResource {
 	bool lazyEpollReg(){
 		if(reged) return false;
 		::epoll_event epm;
-		epm.events = mode == Mode::Write ? EPOLLOUT : EPOLLIN;
+		epm.events = (mode == Mode::Write ? EPOLLOUT : EPOLLIN) | EPOLLONESHOT;
 		epm.data.ptr = this;
 		if(::epoll_ctl(engine->ioEpoll, EPOLL_CTL_ADD, file, &epm)){
 			if(errno == EPERM){
@@ -131,6 +131,13 @@ class FileResource : public IAIOResource {
 			} else PrintLastError("Register to epoll failed");
 		}
 		return reged = true;
+	}
+	void epollRearm(){
+		if(!reged) return;
+		::epoll_event epm;
+		epm.events = (mode == Mode::Write ? EPOLLOUT : EPOLLIN) | EPOLLONESHOT;
+		epm.data.ptr = this;
+		if(::epoll_ctl(engine->ioEpoll, EPOLL_CTL_MOD, file, &epm)) PrintLastError("Register to epoll failed");
 	}
 	#endif
 	public:
@@ -214,6 +221,7 @@ class FileResource : public IAIOResource {
 					}
 					if(errno != EWOULDBLOCK && errno != EAGAIN) PrintLastError("Read failed");
 				}
+				epollRearm();
 				#endif
 				engif->s = FutureState::Running;
 				return engif;
@@ -257,6 +265,7 @@ class FileResource : public IAIOResource {
 					}
 					if(errno != EWOULDBLOCK && errno != EAGAIN) PrintLastError("Write failed");
 				}
+				epollRearm();
 				#endif
 				engif->s = FutureState::Running;
 				return engif;
