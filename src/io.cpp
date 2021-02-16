@@ -86,7 +86,10 @@ class FileResource : public IAIOResource {
 					} else {
 						data.insert(data.end(), buffer.begin(), buffer.begin()+result.transferred);
 						trixter.overlapped.Offset += result.transferred;
-						if(bytes > 0 && (done = data.size() >= bytes)) return something<std::vector<char>>(data);
+						if(bytes > 0 && (done = data.size() >= bytes)){
+							done = true;
+							return data;
+						}
 					}
 				}
 				engif->s = FutureState::Running;
@@ -94,7 +97,10 @@ class FileResource : public IAIOResource {
 				while(ReadFile(file, buffer.begin(), bytes == 0 ? buffer.size() : std::min(buffer.size(), bytes - data.size()), &transferred, &trixter.overlapped)){
 					data.insert(data.end(), buffer.begin(), buffer.begin() + transferred);
 					trixter.overlapped.Offset += transferred;
-					if(bytes > 0 && data.size() >= bytes) return something<std::vector<char>>(data);
+					if(bytes > 0 && data.size() >= bytes){
+						done = true;
+						return data;
+					}
 				}
 				switch(::GetLastError()){
 					case ERROR_IO_PENDING: break;
