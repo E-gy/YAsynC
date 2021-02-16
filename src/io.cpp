@@ -38,6 +38,8 @@ IOYengine::IOYengine(Yengine* e) : engine(e) {
 	if(ioEpoll < 0) throw std::runtime_error("Initalizing EPoll failed");
 	fd_t pipe2[2];
 	if(::pipe2(pipe2, O_CLOEXEC | O_NONBLOCK)) throw std::runtime_error("Initalizing close down pipe failed");
+	cfdStopSend = pipe2[0];
+	cfdStopReceive = pipe2[1];
 	::epoll_event epm;
 	epm.events = EPOLLHUP | EPOLLERR;
 	epm.data.ptr = this;
