@@ -5,6 +5,7 @@
 
 #include "future.hpp"
 #include "engine.hpp"
+#include "result.hpp"
 
 using fd_t = int;
 #ifdef _WIN32
@@ -12,8 +13,10 @@ using fd_t = int;
 //https://gist.github.com/abdul-sami/23e1321c550dc94a9558
 #include <windows.h>
 using ResourceHandle = HANDLE;
+using syserr_t = DWORD;
 #else
 using ResourceHandle = fd_t;
+using syserr_t = int;
 #endif
 
 namespace yasync::io {
@@ -54,8 +57,8 @@ class IResource {
 
 class IAIOResource : public IResource {
 	public:
-		virtual Future<std::vector<char>> read(unsigned bytes) = 0;
-		virtual Future<void> write(const std::vector<char>& data) = 0;
+		virtual Future<result<std::vector<char>, std::string>> read(unsigned bytes) = 0;
+		virtual Future<result<void, std::string>> write(const std::vector<char>& data) = 0;
 };
 
 using IOResource = std::shared_ptr<IAIOResource>; 
@@ -78,8 +81,8 @@ class IOYengine {
 		 * @returns async resource
 		 */
 		IOResource taek(ResourceHandle r);
-		IOResource fileOpenRead(const std::string& path);
-		IOResource fileOpenWrite(const std::string& path);
+		result<IOResource, std::string> fileOpenRead(const std::string& path);
+		result<IOResource, std::string> fileOpenWrite(const std::string& path);
 		//TODO properly extendable for sockets
 	private:
 		friend class IResource;
