@@ -3,6 +3,13 @@
 #include <variant>
 #include <optional>
 
+template<typename S, typename E> class result;
+
+template<typename S, typename E> result<S, E> ROk(const S& ok){ return result<S, E>(ok); }
+template<typename E> result<void, E> ROk(){ return result<void, E>(); }
+template<typename S, typename E> result<S, E> RError(const E& err){ return result<S, E>(err); }
+template<typename S> result<S, void> RError(){ return result<S, void>(); }
+
 template<typename S, typename E> class result {
 	std::variant<S, E> res;
 	public:
@@ -38,7 +45,3 @@ template<typename E> class result<void, E> {
 		template<typename U, typename F> result<U, E> mapOk(F f) const { if(isOk()) return ROk<U, E>(f()); else return RError<U, E>(*error()); }
 		template<typename V, typename F> result<void, V> mapError(F f) const { if(auto r = error()) return RError<void, V>(f(*r)); else return ROk<void, V>(); }
 };
-template<typename S, typename E> result<S, E> ROk(const S& ok){ return result<S, E>(ok); }
-template<typename E> result<void, E> ROk(){ return result<void, E>(); }
-template<typename S, typename E> result<S, E> RError(const E& err){ return result<S, E>(err); }
-template<typename S> result<S, void> RError(){ return result<S, void>(); }
