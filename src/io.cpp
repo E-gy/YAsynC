@@ -25,15 +25,19 @@ constexpr unsigned COMPLETION_KEY_IO = 2;
 
 namespace yasync::io {
 
-IOYengine::IOYengine(Yengine* e) : engine(e) {
+IOYengine::IOYengine(Yengine* e) : engine(e),
 	#ifdef _WIN32
-	ioCompletionPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, ioThreads);
+	ioCompletionPort(CreateIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, ioThreads))
+	#else
+	ioEpoll(::epoll_create1(EPOLL_CLOEXEC))
+	#endif
+{
+	#ifdef _WIN32
 	for(unsigned i = 0; i < ioThreads; i++){
 		std::thread th([this](){ this->iothreadwork(); });
 		th.detach();
 	}
 	#else
-	ioEpoll = ::epoll_create1(EPOLL_CLOEXEC);
 	if(ioEpoll < 0) throw std::runtime_error("Initalizing EPoll failed");
 	fd_t pipe2[2];
 	if(::pipe2(pipe2, O_CLOEXEC | O_NONBLOCK)) throw std::runtime_error("Initalizing close down pipe failed");
@@ -59,6 +63,16 @@ IOYengine::~IOYengine(){
 	close(ioEpoll);
 	#endif
 }
+
+/*result<void, int> IOYengine::iocplReg(ResourceHandle r, bool rearm){
+	#ifdef _WIN32
+	return !rearm && CreateIoCompletionPort(r, ioCompletionPort, COMPLETION_KEY_IO, 0) ? result<void, int>(GetLastError()) : result<void, int>();
+	#else
+	::epoll_event epm;
+	epm.events = EPOLLOUT | EPOLLIN EPOLLONESHOT;
+	epm.data.ptr = this;
+	#endif
+}*/
 
 #ifdef _WIN32
 void PrintLastError(DWORD lerr){
@@ -87,11 +101,6 @@ class FileResource : public IAIOResource {
 		engine->engine->notify(std::dynamic_pointer_cast<IFutureT<IOCompletionInfo>>(engif));
 	}
 	#ifdef _WIN32
-	struct Trixter {
-		OVERLAPPED overlapped;
-		FileResource* cmon;
-	};
-	Trixter trixter = {};
 	#else
 	bool reged = false;
 	bool lazyEpollReg(bool wr){
@@ -122,7 +131,6 @@ class FileResource : public IAIOResource {
 		friend class IOYengine;
 		FileResource(IOYengine* e, ResourceHandle rh) : engine(e), file(rh), buffer(), engif(new OutsideFuture<IOCompletionInfo>()) {
 			#ifdef _WIN32
-			trixter.cmon = this;
 			CreateIoCompletionPort(file, e->ioCompletionPort, COMPLETION_KEY_IO, 0);
 			#else
 			#endif
@@ -154,7 +162,7 @@ class FileResource : public IAIOResource {
 						} else PrintLastError(result.lerr);
 					} else {
 						data.insert(data.end(), buffer.begin(), buffer.begin()+result.transferred);
-						trixter.overlapped.Offset += result.transferred;
+						overlapped()->Offset += result.transferred;
 						if(bytes > 0 && (done = data.size() >= bytes)){
 							done = true;
 							return data;
@@ -162,9 +170,9 @@ class FileResource : public IAIOResource {
 					}
 				}
 				DWORD transferred = 0;
-				while(ReadFile(file, buffer.begin(), bytes == 0 ? buffer.size() : std::min(buffer.size(), bytes - data.size()), &transferred, &trixter.overlapped)){
+				while(ReadFile(file, buffer.begin(), bytes == 0 ? buffer.size() : std::min(buffer.size(), bytes - data.size()), &transferred, overlapped())){
 					data.insert(data.end(), buffer.begin(), buffer.begin() + transferred);
-					trixter.overlapped.Offset += transferred;
+					overlapped()->Offset += transferred;
 					if(bytes > 0 && data.size() >= bytes){
 						done = true;
 						return data;
@@ -213,7 +221,7 @@ class FileResource : public IAIOResource {
 					if(!result.status) PrintLastError(result.lerr);
 					else {
 						data.erase(data.begin(), data.begin()+result.transferred);
-						trixter.overlapped.Offset += result.transferred;
+						overlapped()->Offset += result.transferred;
 						if(data.empty()){
 							done = true;
 							return something<void>();
@@ -221,9 +229,9 @@ class FileResource : public IAIOResource {
 					}
 				}
 				DWORD transferred = 0;
-				while(WriteFile(file, data.data(), data.size(), &transferred, &trixter.overlapped)){
+				while(WriteFile(file, data.data(), data.size(), &transferred, overlapped())){
 					data.erase(data.begin(), data.begin()+transferred);
-					trixter.overlapped.Offset += transferred;
+					overlapped()->Offset += transferred;
 				}
 				if(::GetLastError() != ERROR_IO_PENDING) PrintLastError(::GetLastError());
 				#else
@@ -258,24 +266,24 @@ void IOYengine::iothreadwork(){
 		inf.status = GetQueuedCompletionStatus(ioCompletionPort, &inf.transferred, &key, &overl, INFINITE);
 		inf.lerr = GetLastError();
 		if(key == COMPLETION_KEY_SHUTDOWN) break;
-		if(key == COMPLETION_KEY_IO) reinterpret_cast<FileResource::Trixter*>(overl)->cmon->notify(inf);
+		if(key == COMPLETION_KEY_IO) reinterpret_cast<IResource::Overlapped*>(overl)->resource->notify(inf);
 		#else
 		::epoll_event event;
 		auto es = ::epoll_wait(ioEpoll, &event, 1, -1);
 		if(es < 0) PrintLastError("Epoll wait failed");
 		else if(es == 0 || event.data.ptr == this) break;
-		else reinterpret_cast<FileResource*>(event.data.ptr)->notify(event.events);
+		else reinterpret_cast<IResource*>(event.data.ptr)->notify(event.events);
 		#endif
 	}
 }
 
-Resource IOYengine::taek(ResourceHandle rh){
+IOResource IOYengine::taek(ResourceHandle rh){
 	std::shared_ptr<FileResource> r(new FileResource(this, rh));
 	r->setSelf(r);
 	return r;
 }
 
-Resource IOYengine::fileOpenRead(const std::string& path){
+IOResource IOYengine::fileOpenRead(const std::string& path){
 	ResourceHandle file;
 	#ifdef _WIN32
 	file = CreateFileA(path.c_str(), GENERIC_READ, 0, NULL, OPEN_ALWAYS, FILE_FLAG_OVERLAPPED/* | FILE_FLAG_NO_BUFFERING cf https://docs.microsoft.com/en-us/windows/win32/fileio/file-buffering?redirectedfrom=MSDN */, NULL);
@@ -286,7 +294,7 @@ Resource IOYengine::fileOpenRead(const std::string& path){
 	#endif
 	return taek(file);
 }
-Resource IOYengine::fileOpenWrite(const std::string& path){
+IOResource IOYengine::fileOpenWrite(const std::string& path){
 	ResourceHandle file;
 	#ifdef _WIN32
 	file = CreateFileA(path.c_str(), GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_FLAG_OVERLAPPED, NULL);

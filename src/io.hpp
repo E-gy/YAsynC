@@ -30,37 +30,63 @@ struct IOCompletionInfo {
 using IOCompletionInfo = int;
 #endif
 
-class IAIOResource {
+class IResource {
+	friend class IOYengine;
+	/**
+	 * Used by the engine to notify the resource of completion of current IO operation
+	 */
 	virtual void notify(IOCompletionInfo inf) = 0;
+	#ifdef _WIN32
+	struct Overlapped {
+		OVERLAPPED overlapped;
+		IResource* resource;
+	};
+	Overlapped _overlapped;
+	#endif
+	public:
+		#ifdef _WIN32
+		IResource() : _overlapped({{}, this}) {}
+		OVERLAPPED* overlapped(){ return &_overlapped.overlapped; }
+		#else
+		IResource(){}
+		#endif
+};
+
+class IAIOResource : public IResource {
 	public:
 		virtual Future<std::vector<char>> read(unsigned bytes) = 0;
 		virtual Future<void> write(const std::vector<char>& data) = 0;
 };
 
-using Resource = std::shared_ptr<IAIOResource>; 
+using IOResource = std::shared_ptr<IAIOResource>; 
 
 class IOYengine {
 	public:
 		Yengine* const engine;
 		IOYengine(Yengine* e);
 		~IOYengine();
+		// result<void, int> iocplReg(ResourceHandle r, bool rearm); as much as we'd love to do that, there simply waay to many differences between IOCompletion and EPoll
+		//so let's make platform specific internals public instead ¯\_(ツ)_/¯
+		#ifdef _WIN32
+		HANDLE const ioCompletionPort;
+		#else
+		fd_t const ioEpoll;
+		#endif
 		/**
 		 * Opens asynchronous resource on the handle.
 		 * @param r @consumes
 		 * @returns async resource
 		 */
-		Resource taek(ResourceHandle r);
-		Resource fileOpenRead(const std::string& path);
-		Resource fileOpenWrite(const std::string& path);
+		IOResource taek(ResourceHandle r);
+		IOResource fileOpenRead(const std::string& path);
+		IOResource fileOpenWrite(const std::string& path);
 		//TODO properly extendable for sockets
 	private:
-		friend class FileResource;
+		friend class IResource;
 		void iothreadwork();
 		#ifdef _WIN32
-		HANDLE ioCompletionPort;
-		unsigned ioThreads = 1; //IO events are dispatched by notification to the engine
+		static constexpr unsigned ioThreads = 1; //IO events are dispatched by notification to the engine
 		#else
-		fd_t ioEpoll;
 		fd_t cfdStopSend, cfdStopReceive;
 		#endif
 };
