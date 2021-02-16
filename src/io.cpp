@@ -40,7 +40,7 @@ IOYengine::IOYengine(Yengine* e) : engine(e) {
 	cfdStopSend = pipe2[0];
 	cfdStopReceive = pipe2[1];
 	::epoll_event epm;
-	epm.events = EPOLLHUP | EPOLLERR;
+	epm.events = EPOLLHUP | EPOLLERR | EPOLLONESHOT;
 	epm.data.ptr = this;
 	if(::epoll_ctl(ioEpoll, EPOLL_CTL_ADD, cfdStopReceive, &epm)) throw std::runtime_error("Initalizing close down pipe epoll failed");
 	std::thread th([this](){ this->iothreadwork(); });
