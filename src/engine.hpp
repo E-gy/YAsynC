@@ -273,9 +273,8 @@ class Yengine {
 						return;
 				}
 			} else {
-				auto v = std::get_if<something<void*>>(&g); //do NOT!!! copy. C++ compiler reaaally wants to copy. NO!
 				gent->s = gent->gen->done() ? FutureState::Completed : FutureState::Suspended;
-				gent->val.emplace(*v);
+				gent->val.emplace(std::move(*(std::get_if<something<void*>>(&g)))); //do NOT!!! copy. C++ compiler reaaally wants to copy. NO!
 				//#BeLazy: Whether we're done or not, drop from notifications. If we're done, well that's it. If we aren't, someone up in the pipeline will await for us at some point, setting up the notifications once again.
 				if(auto naut = notifiDrop(task)) task = *naut; //Proceed up the await chain immediately
 				else return;
