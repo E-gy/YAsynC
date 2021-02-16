@@ -40,11 +40,10 @@ class IAIOResource {
 using Resource = std::shared_ptr<IAIOResource>; 
 
 class IOYengine {
-	Yengine* engine;
 	public:
+		Yengine* const engine;
 		IOYengine(Yengine* e);
 		~IOYengine();
-		Yengine* yengine() const;
 		/**
 		 * Opens asynchronous resource on the handle.
 		 * @param r @consumes

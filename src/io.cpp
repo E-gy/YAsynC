@@ -60,8 +60,6 @@ IOYengine::~IOYengine(){
 	#endif
 }
 
-Yengine* IOYengine::yengine() const { return engine; }
-
 #ifdef _WIN32
 void PrintLastError(DWORD lerr){
 	LPSTR err;
