@@ -86,3 +86,22 @@ template<typename T> class something {
 		}
 		operator T() const noexcept { return get(); }
 };
+template<> class something<void> {
+	protected:
+		void* val;
+	public:
+		something() noexcept {
+			val = nullptr;
+		}
+		something(const something& cpy) noexcept {
+			val = cpy.val;
+		}
+		something(something&& mv) noexcept {
+			val = mv.val;
+			mv.val = nullptr;
+		}
+		~something() noexcept {}
+		void* getr() const noexcept {
+			return val;
+		}
+};
