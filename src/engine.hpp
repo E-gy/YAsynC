@@ -5,6 +5,7 @@
 #include <optional>
 #include <memory>
 #include <any>
+#include <tuple>
 
 #include "agen.hpp"
 #include "future.hpp"
@@ -120,6 +121,52 @@ template<typename U, typename F> auto then(Future<U> f, F map){
 
 template<typename U, typename F> auto operator>>(Future<U> f, F map){
 	return then(f, map);
+}
+
+template<typename V, typename F, typename... State> class GeneratorLGenerator : public IGeneratorT<V> {
+	bool d = false;
+	std::tuple<State...> state;
+	F g;
+	public:
+		GeneratorLGenerator(std::tuple<State...> s, F gen) : state(s), g(gen){}
+		bool done() const { return d; }
+		std::variant<AFuture, something<V>> resume(const Yengine* engine){
+			return g(engine, d, state);
+		}
+};
+
+template<typename V, typename F, typename... State> Generator<V> lambdagen_spec(_typed<std::variant<AFuture, something<V>>>, F f, State... args){
+	return Generator<V>(new GeneratorLGenerator<V, F, State...>(std::tuple<State...>(args...), f));
+}
+
+template<typename F, typename... State> auto lambdagen(F f, State... args){
+	const Yengine* engine;
+	bool don;
+	using V = std::decay_t<decltype(f(engine, don, std::tuple<State...>()))>;
+	return lambdagen_spec(_typed<V>{}, f, args...);
+}
+
+template<typename V, typename F, typename S> class GeneratorLGenerator<V, F, S> : public IGeneratorT<V> {
+	bool d = false;
+	S state;
+	F g;
+	public:
+		GeneratorLGenerator(S s, F gen) : state(s), g(gen){}
+		bool done() const { return d; }
+		std::variant<AFuture, something<V>> resume(const Yengine* engine){
+			return g(engine, d, state);
+		}
+};
+
+template<typename V, typename F, typename S> Generator<V> lambdagen_spec(_typed<std::variant<AFuture, something<V>>>, F f, S arg){
+	return Generator<V>(new GeneratorLGenerator<V, F, S>(arg, f));
+}
+
+template<typename F, typename S> auto lambdagen(F f, S arg){
+	const Yengine* engine;
+	bool don;
+	using V = std::decay_t<decltype(f(engine, don, arg))>;
+	return lambdagen_spec(_typed<V>{}, f, arg);
 }
 
 /**
