@@ -77,13 +77,6 @@ static void PrintLastError(const std::string& errm){
 }
 #endif
 
-using fd_t = int;
-#ifdef _WIN32
-using ResourceHandle = HANDLE;
-#else
-using ResourceHandle = fd_t;
-#endif
-
 #ifdef _WIN32
 struct IOCompletionInfo {
 	BOOL status;
@@ -95,19 +88,11 @@ using IOCompletionInfo = int;
 #endif
 
 class FileResource : public IAIOResource {
-	enum class Mode {
-		Read, Write
-	};
 	std::weak_ptr<FileResource> slf;
 	IOYengine* engine;
-	Mode mode;
+	ResourceHandle file;
 	std::array<char, DEFAULT_BUFFER_SIZE> buffer;
 	std::shared_ptr<OutsideFuture<IOCompletionInfo>> engif;
-	#ifdef _WIN32
-	HANDLE file;
-	#else
-	fd_t file;
-	#endif
 	#ifdef _WIN32
 	struct Trixter {
 		OVERLAPPED overlapped;
@@ -116,41 +101,37 @@ class FileResource : public IAIOResource {
 	Trixter trixter = {};
 	#else
 	bool reged = false;
-	bool lazyEpollReg(){
+	bool lazyEpollReg(bool wr){
 		if(reged) return false;
 		::epoll_event epm;
-		epm.events = (mode == Mode::Write ? EPOLLOUT : EPOLLIN) | EPOLLONESHOT;
+		epm.events = (wr ? EPOLLOUT : EPOLLIN) | EPOLLONESHOT;
 		epm.data.ptr = this;
 		if(::epoll_ctl(engine->ioEpoll, EPOLL_CTL_ADD, file, &epm)){
 			if(errno == EPERM){
 				//The file does not support non-blocking io :(
 				//That means that all r/w will succeed (and block). So we report ourselves ready for IO, and off to EOD we go!
-				engif->r.emplace(mode == Mode::Write ? EPOLLOUT : EPOLLIN);
+				engif->r.emplace(wr ? EPOLLOUT : EPOLLIN);
 				engif->s = FutureState::Completed;
 				return !(reged = true);
 			} else PrintLastError("Register to epoll failed");
 		}
 		return reged = true;
 	}
-	void epollRearm(){
+	void epollRearm(bool wr){
 		if(!reged) return;
 		::epoll_event epm;
-		epm.events = (mode == Mode::Write ? EPOLLOUT : EPOLLIN) | EPOLLONESHOT;
+		epm.events = (wr ? EPOLLOUT : EPOLLIN) | EPOLLONESHOT;
 		epm.data.ptr = this;
 		if(::epoll_ctl(engine->ioEpoll, EPOLL_CTL_MOD, file, &epm)) PrintLastError("Register to epoll failed");
 	}
 	#endif
 	public:
 		friend class IOYengine;
-		FileResource(IOYengine* e, Mode m, const std::string& path) : engine(e), mode(m), buffer(), engif(new OutsideFuture<IOCompletionInfo>()) {
+		FileResource(IOYengine* e, ResourceHandle rh) : engine(e), file(rh), buffer(), engif(new OutsideFuture<IOCompletionInfo>()) {
 			#ifdef _WIN32
 			trixter.cmon = this;
-			file = CreateFileA(path.c_str(), mode == Mode::Write ? GENERIC_WRITE : GENERIC_READ, 0, NULL, OPEN_ALWAYS, FILE_FLAG_OVERLAPPED/* | FILE_FLAG_NO_BUFFERING cf https://docs.microsoft.com/en-us/windows/win32/fileio/file-buffering?redirectedfrom=MSDN */, NULL);
-			if(file == INVALID_HANDLE_VALUE) throw std::runtime_error("CreateFile failed :("); //FIXME no?
 			CreateIoCompletionPort(file, e->ioCompletionPort, COMPLETION_KEY_IO, 0);
 			#else
-			file = open(path.c_str(), (mode == Mode::Write ? O_WRONLY | O_CREAT : O_RDONLY) | O_NONBLOCK | O_CLOEXEC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
-			if(file < 0) PrintLastError("Open file failed"); //FIXME no?
 			#endif
 		}
 		FileResource(const FileResource& cpy) = delete;
@@ -204,7 +185,7 @@ class FileResource : public IAIOResource {
 					default: PrintLastError(::GetLastError());
 				}
 				#else
-				if(lazyEpollReg()) return engif;
+				if(lazyEpollReg(false)) return engif;
 				if(engif->s == FutureState::Completed){
 					int leve = *engif->r;
 					if(leve != EPOLLIN) PrintLastError("Epoll wrong event");
@@ -222,7 +203,7 @@ class FileResource : public IAIOResource {
 					}
 					if(errno != EWOULDBLOCK && errno != EAGAIN) PrintLastError("Read failed");
 				}
-				epollRearm();
+				epollRearm(false);
 				#endif
 				engif->s = FutureState::Running;
 				return engif;
@@ -253,7 +234,7 @@ class FileResource : public IAIOResource {
 				}
 				if(::GetLastError() != ERROR_IO_PENDING) PrintLastError(::GetLastError());
 				#else
-				if(lazyEpollReg()) return engif;
+				if(lazyEpollReg(true)) return engif;
 				if(engif->s == FutureState::Completed){
 					int leve = *engif->r;
 					if(leve != EPOLLOUT) PrintLastError("Epoll wrong event");
@@ -267,7 +248,7 @@ class FileResource : public IAIOResource {
 					}
 					if(errno != EWOULDBLOCK && errno != EAGAIN) PrintLastError("Write failed");
 				}
-				epollRearm();
+				epollRearm(true);
 				#endif
 				engif->s = FutureState::Running;
 				return engif;
@@ -306,15 +287,33 @@ void IOYengine::iothreadwork(){
 	}
 }
 
-Resource IOYengine::fileOpenRead(const std::string& path){
-	std::shared_ptr<FileResource> r(new FileResource(this, FileResource::Mode::Read, path));
+Resource IOYengine::taek(ResourceHandle rh){
+	std::shared_ptr<FileResource> r(new FileResource(this, rh));
 	r->setSelf(r);
 	return r;
 }
+
+Resource IOYengine::fileOpenRead(const std::string& path){
+	ResourceHandle file;
+	#ifdef _WIN32
+	file = CreateFileA(path.c_str(), GENERIC_READ, 0, NULL, OPEN_ALWAYS, FILE_FLAG_OVERLAPPED/* | FILE_FLAG_NO_BUFFERING cf https://docs.microsoft.com/en-us/windows/win32/fileio/file-buffering?redirectedfrom=MSDN */, NULL);
+	if(file == INVALID_HANDLE_VALUE) PrintLastError(GetLastError());
+	#else
+	file = open(path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+	if(file < 0) PrintLastError("Open file failed"); //FIXME no?
+	#endif
+	return taek(file);
+}
 Resource IOYengine::fileOpenWrite(const std::string& path){
-	std::shared_ptr<FileResource> r(new FileResource(this, FileResource::Mode::Write, path));
-	r->setSelf(r);
-	return r;
+	ResourceHandle file;
+	#ifdef _WIN32
+	file = CreateFileA(path.c_str(), GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_FLAG_OVERLAPPED, NULL);
+	if(file == INVALID_HANDLE_VALUE) PrintLastError(GetLastError());
+	#else
+	file = open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_NONBLOCK | O_CLOEXEC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
+	if(file < 0) PrintLastError("Open file failed"); //FIXME no?
+	#endif
+	return taek(file);
 }
 
 }

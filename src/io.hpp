@@ -6,12 +6,14 @@
 #include "future.hpp"
 #include "engine.hpp"
 
+using fd_t = int;
 #ifdef _WIN32
 //https://www.drdobbs.com/cpp/multithreaded-asynchronous-io-io-comple/201202921?pgno=4
 //https://gist.github.com/abdul-sami/23e1321c550dc94a9558
 #include <windows.h>
+using ResourceHandle = HANDLE;
 #else
-using fd_t = int;
+using ResourceHandle = fd_t;
 #endif
 
 namespace yasync::io {
@@ -32,6 +34,12 @@ class IOYengine {
 		IOYengine(Yengine* e);
 		~IOYengine();
 		Yengine* yengine() const;
+		/**
+		 * Opens asynchronous resource on the handle.
+		 * @param r @consumes
+		 * @returns async resource
+		 */
+		Resource taek(ResourceHandle r);
 		Resource fileOpenRead(const std::string& path);
 		Resource fileOpenWrite(const std::string& path);
 		//TODO properly extendable for sockets
