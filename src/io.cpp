@@ -3,6 +3,13 @@
 #include <array>
 #include "impls.hpp"
 
+//Common
+namespace yasync::io {
+
+Yengine* IOYengine::yengine() const { return engine; }
+
+}
+
 #ifdef _WIN32
 
 #include <fileapi.h>
@@ -26,7 +33,6 @@ IOYengine::~IOYengine(){
 	for(unsigned i = 0; i < ioThreads; i++) PostQueuedCompletionStatus(ioCompletionPort, 0, COMPLETION_KEY_SHUTDOWN, NULL);
 	CloseHandle(ioCompletionPort);
 }
-Yengine* IOYengine::yengine() const { return engine; }
 
 void PrintLastError(DWORD lerr){
 	LPSTR err;
