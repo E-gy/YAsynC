@@ -103,7 +103,6 @@ template<typename S> result<S, std::string> retSysError(const std::string& messa
 template<typename S> result<S, std::string> retSysError(const std::string& message){ return RError<S, std::string>(printSysError(message)); }
 
 class FileResource : public IAIOResource {
-	std::weak_ptr<FileResource> slf;
 	ResourceHandle file;
 	std::array<char, DEFAULT_BUFFER_SIZE> buffer;
 	std::shared_ptr<OutsideFuture<IOCompletionInfo>> engif;
@@ -156,13 +155,10 @@ class FileResource : public IAIOResource {
 			if(file >= 0) close(file);
 			#endif
 		}
-		auto setSelf(std::shared_ptr<FileResource> self){
-			return slf = self;
-		}
-		Future<result<std::vector<char>, std::string>> _read(size_t bytes){
+		Future<ReadResult> _read(size_t bytes){
 			engif->s = FutureState::Running;
 			//self.get() == this   exists to memory-lock dangling IO resource to this lambda generator
-			return defer(lambdagen([this, self = slf.lock(), bytes]([[maybe_unused]] const Yengine* engine, bool& done, std::vector<char>& data) -> std::variant<AFuture, something<result<std::vector<char>, std::string>>> {
+			return defer(lambdagen([this, self = slf.lock(), bytes]([[maybe_unused]] const Yengine* engine, bool& done, std::vector<char>& data) -> std::variant<AFuture, something<ReadResult>> {
 				if(done) return ROk<std::vector<char>, std::string>(data);
 				#ifdef _WIN32
 				if(engif->s == FutureState::Completed){
@@ -226,9 +222,9 @@ class FileResource : public IAIOResource {
 				return engif;
 			}, std::vector<char>()));
 		}
-		Future<result<void, std::string>> _write(std::vector<char>&& data){
+		Future<WriteResult> _write(std::vector<char>&& data){
 			engif->s = FutureState::Running;
-			return defer(lambdagen([this, self = slf.lock()]([[maybe_unused]] const Yengine* engine, bool& done, std::vector<char>& data) -> std::variant<AFuture, something<result<void, std::string>>> {
+			return defer(lambdagen([this, self = slf.lock()]([[maybe_unused]] const Yengine* engine, bool& done, std::vector<char>& data) -> std::variant<AFuture, something<WriteResult>> {
 				if(data.empty()) done = true;
 				if(done) return ROk<std::string>();
 				#ifdef _WIN32
@@ -276,6 +272,69 @@ class FileResource : public IAIOResource {
 			}, data));
 		}
 };
+
+template<> Future<IAIOResource::ReadResult> IAIOResource::read<std::vector<char>>(){
+	if(readbuff.empty()) return _read(0);
+	return _read(0) >> [this, self = slf.lock()](auto rr){ return rr->mapOk([this](auto data){
+		std::vector<char> nd;
+		nd.reserve(readbuff.size() + data.size());
+		MoveAppend(readbuff, nd);
+		MoveAppend(data, nd);
+		return nd;
+	});};
+}
+template<> Future<IAIOResource::ReadResult> IAIOResource::read<std::vector<char>>(size_t upto){
+	if(readbuff.size() >= upto){
+		std::vector<char> ret(readbuff.begin(), readbuff.begin()+upto);
+		readbuff.erase(readbuff.begin(), readbuff.begin()+upto);
+		return completed(IAIOResource::ReadResult(std::move(ret)));
+	}
+	auto n2r = upto-readbuff.size();
+	return _read(n2r + OBS - n2r%OBS) >> [this, self = slf.lock(), n2r](auto rr){ return rr->mapOk([=](auto data){
+		std::vector<char> nd;
+		nd.reserve(readbuff.size() + std::min(n2r, data.size()));
+		MoveAppend(readbuff, nd);
+		if(data.size() > n2r){
+			auto sfl = data.begin()+n2r;
+			std::move(sfl, data.end(), std::back_inserter(readbuff));
+			std::move(data.begin(), sfl, std::back_inserter(nd));
+			data.clear();
+		} else MoveAppend(data, nd);
+		return nd;
+	});};
+}
+
+template<> Future<IAIOResource::WriteResult> IAIOResource::write<std::vector<char>>(const std::vector<char>& dataRange){
+	return _write(std::vector<char>(dataRange));
+}
+template<> Future<IAIOResource::WriteResult> IAIOResource::write<std::vector<char>>(std::vector<char>&& dataRange){
+	return _write(std::move(dataRange));
+}
+
+//L2
+
+IAIOResource::Writer::Writer(IOResource r) : resource(r), eodnot(new OutsideFuture<IAIOResource::WriteResult>()), lflush(completed(IAIOResource::WriteResult())) {}
+IAIOResource::Writer::~Writer(){
+	resource->engine->engine <<= flush() >> [res = resource, naut = eodnot](auto wr){
+		naut->r.emplace(*wr);
+		naut->s = FutureState::Completed;
+		res->engine->engine->notify(std::dynamic_pointer_cast<IFutureT<IAIOResource::WriteResult>>(naut));
+	};
+}
+Future<IAIOResource::WriteResult> IAIOResource::Writer::eod() const { return eodnot; }
+Future<IAIOResource::WriteResult> IAIOResource::Writer::flush(){
+	std::vector<char> buff;
+	std::swap(buff, buffer);
+	return lflush = (lflush >> [res = resource, buff](auto lr){
+		if(lr->error()) return completed(*lr);
+		else return res->write(buff);
+	});
+}
+
+IORWriter IAIOResource::writer(){
+	return IORWriter(new Writer(slf.lock()));
+}
+
 
 void IOYengine::iothreadwork(){
 	while(true){

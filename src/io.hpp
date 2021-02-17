@@ -6,6 +6,9 @@
 #include "future.hpp"
 #include "engine.hpp"
 #include "result.hpp"
+#include "util.hpp"
+#include "impls.hpp"
+#include <sstream>
 
 using fd_t = int;
 #ifdef _WIN32
@@ -56,23 +59,30 @@ class IResource {
 };
 
 class IAIOResource;
-using IOResource = std::shared_ptr<IAIOResource>; 
+using IOResource = std::shared_ptr<IAIOResource>;
+
+template<typename T> auto mapVecToT(){
+	if constexpr (std::is_same<T, std::vector<char>>::value) return [](auto r){ return r.get(); };
+	else return [](auto rr){ return rr->mapOk([](auto v){ return T(v.begin(), v.end()); }); };
+}
 
 class IAIOResource : public IResource {
 	/**
 	 * Optimal [IO data] Block Size
 	 */
 	static constexpr size_t OBS = 4096;
-	using ReadResult = result<std::vector<char>, std::string>;
-	using WriteResult = result<void, std::string>;
 	protected:
 		IAIOResource(IOYengine* e) : engine(e){}
+		std::weak_ptr<IAIOResource> slf;
+		auto setSelf(std::shared_ptr<IAIOResource> self){ return slf = self; }
+		using ReadResult = result<std::vector<char>, std::string>;
 		/**
 		 * Reads up to the number of bytes requested, or EOD (if unspecified), from the resource.
 		 * @param bytes number of bytes to read, 0 for unlimited
 		 * @returns result of the read
 		 */
 		virtual Future<ReadResult> _read(size_t bytes = 0) = 0;
+		using WriteResult = result<void, std::string>;
 		/**
 		 * Writes the data to the resource.
 		 * @param data data to write
@@ -87,28 +97,44 @@ class IAIOResource : public IResource {
 		/**
 		 * Reads until EOD.
 		 */
-		template<typename T> Future<result<T, std::string>> read();
+		template<typename T> Future<result<T, std::string>> read(){
+			return read<std::vector<char>>() >> mapVecToT<T>();
+		}
 		/**
 		 * Reads up to number of bytes, or EOD.
 		 */
-		template<typename T> Future<result<T, std::string>> read(size_t upto);	
+		template<typename T> Future<result<T, std::string>> read(size_t upto){
+			return read<std::vector<char>>(upto) >> mapVecToT<T>();
+		}
+		template<typename PatIt> Future<ReadResult> read_(PatIt patBegin, PatIt patEnd);
 		/**
 		 * Reads until reaching the pattern. Pattern is included in and is the last sequence of the result.
 		 */
-		template<typename T, typename PatIt> Future<result<T, std::string>> read(PatIt patBegin, PatIt patEnd);
+		template<typename T, typename PatIt> Future<result<T, std::string>> read(PatIt patBegin, PatIt patEnd){
+			return read_<PatIt>(patBegin, patEnd) >> mapVecToT<T>();
+		}
 
 		/**
 		 * Writes data
 		 */
-		template<typename DataP> Future<WriteResult> write(DataP data, size_t dataSize);
+		template<typename DataP> Future<WriteResult> write(DataP data, size_t dataSize){
+			return write(std::vector<char>(data, data+dataSize));
+		}
 		/**
 		 * Writes data
 		 */
-		template<typename DataIt> Future<WriteResult> write(DataIt dataBegin, DataIt dataEnd);
+		template<typename DataIt> Future<WriteResult> write(DataIt dataBegin, DataIt dataEnd){
+			return write(std::vector<char>(dataBegin, dataEnd));
+		}
 		/**
 		 * Writes data
 		 */
-		template<typename Range> Future<WriteResult> write(const Range& dataRange);
+		template<typename Range> Future<WriteResult> write(const Range& dataRange){
+			return write(std::vector<char>(dataRange.begin(), dataRange.end()));
+		}
+		template<typename Range> Future<WriteResult> write(Range && dataRange){
+			return write(std::vector<char>(dataRange.begin(), dataRange.end()));
+		}
 		//L2
 		/**
 		 * (Lazy?) Stream-like writer.
@@ -118,24 +144,88 @@ class IAIOResource : public IResource {
 		 */
 		class Writer {
 			IOResource resource;
+			std::vector<char> buffer;
+			std::shared_ptr<OutsideFuture<WriteResult>> eodnot;
+			Future<WriteResult> lflush;
 			public:
+				Writer(IOResource resource);
+				~Writer();
+				Writer(const Writer& cpy) = delete;
+				Writer(Writer && mv) = delete;
 				/**
 				 * Provides a future that is resolved when the writer finished _all_ writing.
 				 */
-				Future<WriteResult> eod();
+				Future<WriteResult> eod() const;
 				/**
 				 * Flushes intermediate data [_proactively_!].
 				 * The writer can still be used after the flush.
 				 */
 				Future<WriteResult> flush();
-				template<typename DataIt> auto write(DataIt dataBegin, DataIt dataEnd);
-				template<typename Data> auto operator<<(Data d);
+				template<typename DataIt> auto write(DataIt dataBegin, DataIt dataEnd){
+					buffer.insert(buffer.end(), dataBegin, dataEnd);
+					return this;
+				}
+				template<typename DataRange> auto write(DataRange range){
+					return write(range.begin(), range.end());
+				}
+				template<typename Data> auto operator<<(Data d){
+					std::ostringstream buff;
+					buff << d;
+					write(buff.str());
+					return this;
+				}
 		};
 		/**
 		 * Creates a new [lazy] (text) writer for the resource
 		 */
-		Writer writer();
+		std::shared_ptr<Writer> writer();
 };
+
+template<> Future<IAIOResource::ReadResult> IAIOResource::read<std::vector<char>>();
+template<> Future<IAIOResource::ReadResult> IAIOResource::read<std::vector<char>>(size_t upto);
+
+template<typename PatIt> Future<IAIOResource::ReadResult> IAIOResource::read_(PatIt patBegin, PatIt patEnd){
+	for(size_t i = 0; i < readbuff.size(); i++){
+		auto pat = patBegin;
+		size_t j = i;
+		for(; j < readbuff.size() && pat != patEnd; j++, pat++) if(readbuff[j] != *pat) break;
+		if(pat == patEnd) return read<std::vector<char>>(j);
+	}
+	return defer(lambdagen([this, self = slf.lock(), pattern = std::vector(patBegin, patEnd)]([[maybe_unused]] Yengine* engine, bool& done, std::optional<Future<IAIOResource::ReadResult>>& awao) -> std::variant<AFuture, something<IAIOResource::ReadResult>> {
+		if(done) return IAIOResource::ReadResult("Result already submitted!");
+		if(awao){
+			if((*awao)->state() == FutureState::Completed){
+				auto res = (*awao)->result()->getr();
+				if(auto err = res->error()){
+					done = true;
+					return IAIOResource::ReadResult(*err);
+				}
+				readbuff.insert(readbuff.end(), res->ok()->begin(), res->ok()->end());
+			} else return *awao;
+		}
+		for(size_t i = 0; i < readbuff.size(); i++){
+			auto pat = pattern.begin();
+			size_t j = i;
+			for(; j < readbuff.size() && pat != pattern.end(); j++, pat++) if(readbuff[j] != *pat) break;
+			if(pat == pattern.end()){
+				done = true;
+				return *read<std::vector<char>>(j)->result();
+			}
+		}
+		auto gmd = _read(OBS);
+		awao = std::optional<Future<IAIOResource::ReadResult>>(gmd);
+		return gmd;
+	}, std::nullopt));
+}
+
+template<> Future<IAIOResource::WriteResult> IAIOResource::write<std::vector<char>>(const std::vector<char>& dataRange);
+template<> Future<IAIOResource::WriteResult> IAIOResource::write<std::vector<char>>(std::vector<char>&& dataRange);
+
+using IORWriter = std::shared_ptr<IAIOResource::Writer>;
+template<typename Data> auto operator<<(IORWriter wr, Data d){
+	*wr << d;
+	return wr;
+}
 
 class IOYengine {
 	public:
