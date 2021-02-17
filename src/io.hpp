@@ -32,6 +32,8 @@ struct IOCompletionInfo {
 	DWORD transferred;
 	DWORD lerr;
 };
+constexpr unsigned COMPLETION_KEY_SHUTDOWN = 1;
+constexpr unsigned COMPLETION_KEY_IO = 2;
 #else
 using IOCompletionInfo = int;
 #endif
@@ -65,6 +67,11 @@ template<typename T> auto mapVecToT(){
 	if constexpr (std::is_same<T, std::vector<char>>::value) return [](auto r){ return r.get(); };
 	else return [](auto rr){ return rr->mapOk([](auto v){ return T(v.begin(), v.end()); }); };
 }
+
+std::string printSysError(const std::string& message, syserr_t e);
+std::string printSysError(const std::string& message);
+template<typename S> result<S, std::string> retSysError(const std::string& message, syserr_t e){ return RError<S, std::string>(printSysError(message, e)); }
+template<typename S> result<S, std::string> retSysError(const std::string& message){ return RError<S, std::string>(printSysError(message)); }
 
 class IAIOResource : public IResource {
 	/**
