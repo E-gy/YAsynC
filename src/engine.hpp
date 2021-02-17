@@ -171,7 +171,8 @@ template<typename V, typename F, typename S> Generator<V> lambdagen_spec(_typed<
 template<typename F, typename S> auto lambdagen(F f, S arg){
 	const Yengine* engine;
 	bool don;
-	using V = std::decay_t<decltype(f(engine, don, arg))>;
+	S _arg;
+	using V = std::decay_t<decltype(f(engine, don, _arg))>;
 	return lambdagen_spec(_typed<V>{}, f, arg);
 }
 

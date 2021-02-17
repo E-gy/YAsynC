@@ -18,11 +18,6 @@
 #endif
 
 constexpr size_t DEFAULT_BUFFER_SIZE = 4096;
-#ifdef _WIN32
-constexpr unsigned COMPLETION_KEY_SHUTDOWN = 1;
-constexpr unsigned COMPLETION_KEY_IO = 2;
-#else
-#endif
 
 namespace yasync::io {
 
@@ -99,8 +94,6 @@ std::string printSysError(const std::string& message){
 	#endif
 	);
 }
-template<typename S> result<S, std::string> retSysError(const std::string& message, syserr_t e){ return RError<S, std::string>(printSysError(message, e)); }
-template<typename S> result<S, std::string> retSysError(const std::string& message){ return RError<S, std::string>(printSysError(message)); }
 
 class FileResource : public IAIOResource {
 	ResourceHandle file;

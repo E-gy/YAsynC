@@ -113,12 +113,15 @@ class IAIOResource : public IResource {
 		template<typename T> Future<result<T, std::string>> read(size_t upto){
 			return read<std::vector<char>>(upto) >> mapVecToT<T>();
 		}
-		template<typename PatIt> Future<ReadResult> read_(PatIt patBegin, PatIt patEnd);
+		template<typename PatIt> Future<ReadResult> read_(const PatIt& patBegin, const PatIt& patEnd);
 		/**
 		 * Reads until reaching the pattern. Pattern is included in and is the last sequence of the result.
 		 */
-		template<typename T, typename PatIt> Future<result<T, std::string>> read(PatIt patBegin, PatIt patEnd){
+		template<typename T, typename PatIt> Future<result<T, std::string>> read(const PatIt& patBegin, const PatIt& patEnd){
 			return read_<PatIt>(patBegin, patEnd) >> mapVecToT<T>();
+		}
+		template<typename T> Future<result<T, std::string>> read(const std::string& pattern){
+			return read<T>(pattern.begin(), pattern.end());
 		}
 
 		/**
@@ -191,14 +194,14 @@ class IAIOResource : public IResource {
 template<> Future<IAIOResource::ReadResult> IAIOResource::read<std::vector<char>>();
 template<> Future<IAIOResource::ReadResult> IAIOResource::read<std::vector<char>>(size_t upto);
 
-template<typename PatIt> Future<IAIOResource::ReadResult> IAIOResource::read_(PatIt patBegin, PatIt patEnd){
+template<typename PatIt> Future<IAIOResource::ReadResult> IAIOResource::read_(const PatIt& patBegin, const PatIt& patEnd){
 	for(size_t i = 0; i < readbuff.size(); i++){
 		auto pat = patBegin;
 		size_t j = i;
 		for(; j < readbuff.size() && pat != patEnd; j++, pat++) if(readbuff[j] != *pat) break;
 		if(pat == patEnd) return read<std::vector<char>>(j);
 	}
-	return defer(lambdagen([this, self = slf.lock(), pattern = std::vector(patBegin, patEnd)]([[maybe_unused]] Yengine* engine, bool& done, std::optional<Future<IAIOResource::ReadResult>>& awao) -> std::variant<AFuture, something<IAIOResource::ReadResult>> {
+	return defer(lambdagen([this, self = slf.lock(), pattern = std::vector<char>(patBegin, patEnd)]([[maybe_unused]] const Yengine* engine, bool& done, std::optional<Future<IAIOResource::ReadResult>>& awao) -> std::variant<AFuture, something<IAIOResource::ReadResult>> {
 		if(done) return IAIOResource::ReadResult("Result already submitted!");
 		if(awao){
 			if((*awao)->state() == FutureState::Completed){
@@ -222,7 +225,7 @@ template<typename PatIt> Future<IAIOResource::ReadResult> IAIOResource::read_(Pa
 		auto gmd = _read(OBS);
 		awao = std::optional<Future<IAIOResource::ReadResult>>(gmd);
 		return gmd;
-	}, std::nullopt));
+	}, std::optional<Future<IAIOResource::ReadResult>>(std::nullopt)));
 }
 
 template<> Future<IAIOResource::WriteResult> IAIOResource::write<std::vector<char>>(const std::vector<char>& dataRange);
