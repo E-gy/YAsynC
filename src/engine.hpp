@@ -288,4 +288,6 @@ class Yengine {
 		}
 };
 
+template<typename T> auto operator<<=(Yengine* const engine, Future<T> f){ return engine->execute(f); }
+
 }

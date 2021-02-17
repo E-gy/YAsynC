@@ -85,6 +85,8 @@ template<typename T> class something {
 			return val;
 		}
 		operator T() const noexcept { return get(); }
+		T operator*() const noexcept { return get(); }
+		T* operator->() const noexcept { return val; }
 };
 template<> class something<void> {
 	protected:
