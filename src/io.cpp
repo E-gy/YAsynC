@@ -252,7 +252,7 @@ class FileResource : public IAIOResource {
 				if(::GetLastError() != ERROR_IO_PENDING) return retSysError<void>("Sync Write failed");
 				#else
 				{
-					auto rr = lazyEpollReg(false);
+					auto rr = lazyEpollReg(true);
 					if(auto err = rr.error()) return RError<void>(*err);
 					else if(*rr.ok()) return engif;
 				}
