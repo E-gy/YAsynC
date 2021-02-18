@@ -65,15 +65,33 @@ template<typename T> class something {
 	protected:
 		T* val;
 	public:
+		something(){
+			val = nullptr;
+		}
 		something(const T& v) noexcept {
 			val = new T(v);
 		}
 		something(const something& cpy) noexcept {
 			val = new T(cpy.get());
 		}
+		something<T>& operator=(const something<T>& cpy) noexcept {
+			if(this != &cpy){
+				if(val) delete val;
+				val = cpy.val ? new T(*cpy.val) : nullptr;
+			}
+			return *this;
+		}
 		something(something&& mv) noexcept {
 			val = mv.val;
 			mv.val = nullptr;
+		}
+		something<T>& operator=(something<T> && mv) noexcept {
+			if(val) delete val;
+			if(this != &mv){
+				val = mv.val;
+				mv.val = nullptr;
+			}
+			return *this;
 		}
 		~something() noexcept {
 			if(val) delete val;
@@ -98,9 +116,20 @@ template<> class something<void> {
 		something(const something& cpy) noexcept {
 			val = cpy.val;
 		}
+		something<void>& operator=(const something<void>& cpy) noexcept {
+			if(this != &cpy) val = cpy.val;
+			return *this;
+		}
 		something(something&& mv) noexcept {
 			val = mv.val;
 			mv.val = nullptr;
+		}
+		something<void>& operator=(something<void> && mv) noexcept {
+			if(this != &mv){
+				val = mv.val;
+				mv.val = nullptr;
+			}
+			return *this;
 		}
 		~something() noexcept {}
 		void* getr() const noexcept {
