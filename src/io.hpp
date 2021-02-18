@@ -205,12 +205,12 @@ template<typename PatIt> Future<IAIOResource::ReadResult> IAIOResource::read_(co
 		if(awao){
 			auto gmd = *awao;
 			if(gmd->state() == FutureState::Completed){
-				auto res = gmd->result()->getr();
-				if(auto err = res->error()){
+				auto res = gmd->result()->get();
+				if(auto err = res.error()){
 					done = true;
 					return IAIOResource::ReadResult(*err);
 				}
-				auto rd = *res->ok();
+				auto rd = *res.ok();
 				MoveAppend(rd, readbuff);
 			} else return gmd;
 		}
