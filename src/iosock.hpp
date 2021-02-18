@@ -37,6 +37,22 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Acc>
 
 //TODO FIXME do NOT use ReleaseHanle for sockets, use shutdown/WSASendDisconnect + closesocket instead https://docs.microsoft.com/en-us/windows/win32/api/handleapi/nf-handleapi-closehandle 
 
+class AHandledStrayIOSocket : public IHandledResource {
+	public:
+		inline SocketHandle sock() const { return SocketHandle(rh); }
+		AHandledStrayIOSocket(SocketHandle sock) : IHandledResource(ResourceHandle(sock)){}
+		~AHandledStrayIOSocket(){
+			#ifdef _WIN32
+			if(sock() != INVALID_SOCKET){
+				shutdown(sock(), SD_BOTH);
+				closesocket(sock());
+			}
+			#else
+			#endif
+		}
+};
+using HandledStrayIOSocket = std::unique_ptr<AHandledStrayIOSocket>;
+
 /**
  * @typeparam Acc (AddressInfo, IOResource) -> result<void, std::string>
  */
@@ -49,8 +65,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Acc>
 			#ifdef _WIN32
 			if(sock != INVALID_SOCKET) closesocket(sock);
 			sock = INVALID_SOCKET;
-			if(lconn != INVALID_SOCKET) closesocket(lconn);
-			lconn = INVALID_SOCKET;
+			lconn.reset();
 			#else
 			if(sock >= 0) close(sock);
 			sock = -1;
@@ -83,7 +98,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Acc>
 			#endif
 		}
 		#ifdef _WIN32
-		SocketHandle lconn = INVALID_SOCKET;
+		HandledStrayIOSocket lconn;
 		struct InterlocInf {
 			struct PadAddr {
 				AddressInfo addr;
@@ -127,9 +142,8 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Acc>
 					switch((*engif->r)->type){
 						case ListenEventType::Accept:{
 							#ifdef _WIN32
-							if(::setsockopt(lconn, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, reinterpret_cast<char*>(&sock), sizeof(sock)) == SOCKET_ERROR) return retSysNetError<void>("Set accepting socket accept failed");
-							auto takire = acceptor(linterloc.remote.addr, engine->taek(reinterpret_cast<HANDLE>(lconn)));
-							lconn = INVALID_SOCKET;
+							if(::setsockopt(lconn->sock(), SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, reinterpret_cast<char*>(&sock), sizeof(sock)) == SOCKET_ERROR) return retSysNetError<void>("Set accepting socket accept failed");
+							auto takire = acceptor(linterloc.remote.addr, engine->taek(HandledResource(std::move(lconn))));
 							if(takire.isError()) return takire;
 							#else
 							#endif
@@ -147,17 +161,15 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Acc>
 				#ifdef _WIN32
 				bool goAsync = false;
 				while(!goAsync){
-					if(lconn != INVALID_SOCKET){
-						closesocket(lconn);
-						lconn = INVALID_SOCKET;
+					{
+						auto nconn = ::WSASocket(SDomain, SType, SProto, NULL, 0, WSA_FLAG_OVERLAPPED);
+						if(nconn == INVALID_SOCKET) return retSysNetError<void>("Create accepting socket failed");
+						lconn.reset(new AHandledStrayIOSocket(nconn));
 					}
-					lconn = ::WSASocket(SDomain, SType, SProto, NULL, 0, WSA_FLAG_OVERLAPPED);
-					if(lconn == INVALID_SOCKET) return retSysNetError<void>("Create accepting socket failed");
 					DWORD reclen;
-					if(::AcceptEx(sock, lconn, &linterloc, 0, sizeof(linterloc.local), sizeof(linterloc.remote), &reclen, overlapped())){
-						if(::setsockopt(lconn, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, reinterpret_cast<char*>(&sock), sizeof(sock)) == SOCKET_ERROR) return retSysNetError<void>("Set accepting socket accept failed");
-						auto takire = acceptor(linterloc.remote.addr, engine->taek(reinterpret_cast<HANDLE>(lconn)));
-						lconn = INVALID_SOCKET;
+					if(::AcceptEx(sock, lconn->sock(), &linterloc, 0, sizeof(linterloc.local), sizeof(linterloc.remote), &reclen, overlapped())){
+						if(::setsockopt(lconn->sock(), SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, reinterpret_cast<char*>(&sock), sizeof(sock)) == SOCKET_ERROR) return retSysNetError<void>("Set accepting socket accept failed");
+						auto takire = acceptor(linterloc.remote.addr, engine->taek(HandledResource(std::move(lconn))));
 						if(takire.isError()) return takire;
 					}
 					else switch(::WSAGetLastError()){
