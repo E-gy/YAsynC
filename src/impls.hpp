@@ -38,7 +38,7 @@ template<typename T> class OutsideFuture : public IFutureT<T> {
 template<typename T> Future<T> completed(const T& t){
 	std::shared_ptr<OutsideFuture<T>> vf(new OutsideFuture<T>());
 	vf->s = FutureState::Completed;
-	vf->r.reset(new T(t));
+	vf->r = t;
 	return vf;
 } 
 

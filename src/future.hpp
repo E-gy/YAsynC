@@ -38,7 +38,7 @@ template<typename T> class movonly {
 		movonly(const movonly& cpy) = delete;
 		movonly& operator=(const movonly& cpy) = delete;
 		auto operator*(){ return *t; }
-		auto operator->(){ return t.operator->; }
+		auto operator->(){ return t.get(); }
 };
 template<> class movonly<void> {
 	std::unique_ptr<void*> t;
