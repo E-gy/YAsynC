@@ -237,6 +237,10 @@ class FileResource : public IAIOResource {
 				while(WriteFile(file, data.data(), data.size(), &transferred, overlapped())){
 					data.erase(data.begin(), data.begin()+transferred);
 					overlapped()->Offset += transferred;
+					if(data.empty()){
+						done = true;
+						return ROk<std::string>();
+					}
 				}
 				if(::GetLastError() != ERROR_IO_PENDING) return retSysError<void>("Sync Write failed");
 				#else
