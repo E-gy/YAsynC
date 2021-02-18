@@ -22,6 +22,8 @@ class IFuture {
 		virtual FutureState state() = 0;
 };
 
+//TODO FIXME someone f'd up a lot of things. Futures' boxed containers cause waay too many copies. That's bad for large data.
+
 template<typename T> class IFutureT : public IFuture {
 	public:
 		/**
