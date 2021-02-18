@@ -13,31 +13,14 @@
 
 namespace yasync {
 
-class Yengine;
-
 template<typename T> class FutureG : public IFutureT<T> {
-	const Generator<T> gen;
-	FutureState s = FutureState::Suspended;
-	bool hasr = false;
-	something<T> r;
 	public:
+		Generator<T> gen;
+		FutureState s = FutureState::Suspended;
+		std::optional<something<T>> val;
 		FutureG(Generator<T> g) : gen(g) {}
 		FutureState state(){ return s; }
-		std::optional<something<T>*> result(){ return hasr ? std::optional(&r) : std::nullopt; }
-		something<T>&& taker(){
-			hasr = false;
-			return std::move(r);
-		}
-	private:
-		friend class Yengine;
-		void transition(FutureState st){
-			s = st;
-		}
-		void transition(FutureState st, something<T> && res){
-			transition(st);
-			hasr = true;
-			r = res;
-		}
+		std::optional<something<T>> result(){ return val; }
 };
 
 /**
@@ -58,7 +41,7 @@ template<typename T> class IdentityGenerator : public IGeneratorT<T> {
 		std::variant<AFuture, something<T>> resume([[maybe_unused]] const Yengine* engine){
 			if(w->state() == FutureState::Completed || !(reqd = !reqd)){
 				if constexpr (std::is_same<T, void>::value) return something<void>();
-				else return w->taker();
+				else return something<T>(*(w->result()));
 			} else return w;
 		}
 };
@@ -73,9 +56,9 @@ template<typename V, typename U, typename F> class ChainingGenerator : public IG
 		std::variant<AFuture, something<V>> resume([[maybe_unused]] const Yengine* engine){
 			if(w->state() == FutureState::Completed || !(reqd = !reqd)){
 				if constexpr (std::is_same<V, void>::value){
-					f(w->taker());
+					f(*(w->result()));
 					return something<void>();
-				} else return something<V>(f(w->taker()));
+				} else return something<V>(f(*(w->result())));
 			} else return w;
 		}
 };
@@ -97,7 +80,7 @@ template<typename V, typename U, typename F> class ChainingWrappingGenerator : p
 					state = State::A0;
 					return awa;
 				case State::A0: {
-					Future<V> f1 = gf(awa->taker());
+					Future<V> f1 = gf(*(awa->result()));
 					nxt = f1;
 					[[fallthrough]];
 				}
@@ -113,10 +96,10 @@ template<typename V, typename U, typename F> class ChainingWrappingGenerator : p
 							nxt = std::nullopt;
 						}
 					else state = State::A1r;
-					return f1->taker();
+					return *(f1->result());
 				}
 				case State::Fi:
-					return (*nxt)->taker();
+					return *((*nxt)->result());
 				default: //never
 					return awa;
 			}
@@ -138,7 +121,7 @@ template <typename V, typename U, typename F> Future<V> then_spec(Future<U> f, F
  * @returns @ref
  */
 template<typename U, typename F> auto then(Future<U> f, F map){
-	using V = std::decay_t<decltype(map(f->taker()))>;
+	using V = std::decay_t<decltype(map(*(f->result())))>;
 	return then_spec(f, map, _typed<V>{});
 }
 
@@ -197,7 +180,7 @@ template<typename F, typename S> auto lambdagen(F f, S arg){
  * @see then but with manual type parametrization
  */
 template<typename V, typename U, typename F> Future<V> them(Future<U> f, F map){
-	using t_rt = std::decay_t<decltype(map(f->taker()))>;
+	using t_rt = std::decay_t<decltype(map(*(f->result())))>;
 	if constexpr (std::is_convertible<t_rt, AFuture>::value) return defer(Generator<V>(new ChainingWrappingGenerator<V, U, F>(f, map)));
 	else return defer(Generator<V>(new ChainingGenerator<V, U, F>(f, map)));
 }
@@ -269,8 +252,8 @@ class Yengine {
 			//cont:
 			while(true)
 			{
-			auto gent = (FutureG<void>*) task.get();
-			gent->transition(FutureState::Running);
+			auto gent = (FutureG<void*>*) task.get();
+			gent->s = FutureState::Running;
 			auto g = gent->gen->resume(this);
 			if(auto awa = std::get_if<AFuture>(&g)){
 				switch((*awa)->state()){
@@ -278,7 +261,7 @@ class Yengine {
 						// goto cont;
 						break;
 					case FutureState::Suspended:
-						gent->transition(FutureState::Awaiting);
+						gent->s = FutureState::Awaiting;
 						notifiAdd(*awa, task);
 						task = *awa;
 						// goto cont;
@@ -286,12 +269,13 @@ class Yengine {
 					case FutureState::Queued: //This is stoopid, but hey we don't want to sync what we don't need, so it'll wait
 					case FutureState::Awaiting:
 					case FutureState::Running:
-						gent->transition(FutureState::Awaiting);
+						gent->s = FutureState::Awaiting;
 						notifiAdd(*awa, task);
 						return;
 				}
 			} else {
-				gent->transition(gent->gen->done() ? FutureState::Completed : FutureState::Suspended, std::move(*(std::get_if<something<void>>(&g)))); //do NOT!!! copy. C++ compiler reaaally wants to copy. NO!
+				gent->s = gent->gen->done() ? FutureState::Completed : FutureState::Suspended;
+				gent->val.emplace(std::move(*(std::get_if<something<void*>>(&g)))); //do NOT!!! copy. C++ compiler reaaally wants to copy. NO!
 				//#BeLazy: Whether we're done or not, drop from notifications. If we're done, well that's it. If we aren't, someone up in the pipeline will await for us at some point, setting up the notifications once again.
 				if(auto naut = notifiDrop(task)) task = *naut; //Proceed up the await chain immediately
 				else return;
