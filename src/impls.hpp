@@ -32,10 +32,7 @@ template<typename T> class OutsideFuture : public IFutureT<T> {
 		FutureState s = FutureState::Running;
 		FutureState state(){ return s; }
 		movonly<T> r;
-		movonly<T> result(){
-			std::cout << "result stolen from " << this << " [outside]\n";
-			return std::move(r);
-		}
+		movonly<T> result(){ return std::move(r); }
 };
 
 template<typename T> Future<T> completed(const T& t){

@@ -11,8 +11,6 @@
 #include "future.hpp"
 #include "threadsafequeue.hpp"
 
-#include <iostream>
-
 namespace yasync {
 
 template<typename T> class FutureG : public IFutureT<T> {
@@ -23,15 +21,11 @@ template<typename T> class FutureG : public IFutureT<T> {
 		const Generator<T> gen;
 		FutureG(Generator<T> g) : gen(g) {}
 		FutureState state(){ return s; }
-		movonly<T> result(){
-			std::cout << "result stolen from " << this << "\n";
-			return std::move(val);
-		}
+		movonly<T> result(){ return std::move(val); }
 		void set(FutureState state){ s = state; }
 		void set(FutureState state, movonly<T> && v){
 			set(state);
 			val = std::move(v);
-			std::cout << "result put into " << this << "\n";
 		}
 };
 
@@ -43,20 +37,6 @@ template<typename T> class FutureG : public IFutureT<T> {
 template<typename T> Future<T> defer(Generator<T> gen){
 	return Future<T>(new FutureG<T>(gen));
 }
-
-template<typename T> class IdentityGenerator : public IGeneratorT<T> {
-	Future<T> w;
-	bool reqd = false;
-	public:
-		IdentityGenerator(Future<T> awa) : w(awa) {}
-		bool done() const { return reqd && w->state() == FutureState::Completed; }
-		std::variant<AFuture, movonly<T>> resume([[maybe_unused]] const Yengine* engine){
-			if(w->state() == FutureState::Completed || !(reqd = !reqd)){
-				if constexpr (std::is_same<T, void>::value) return movonly<void>();
-				else return w->result();
-			} else return w;
-		}
-};
 
 template<typename V, typename U, typename F> class ChainingGenerator : public IGeneratorT<V> {
 	Future<U> w;
@@ -245,12 +225,8 @@ class Yengine {
 		 * Notifies the engine of completion of an external future.
 		 * Returns almost immediately - actual processing of the notification will happen internally.
 		 */
-		template<typename T> void notify(Future<T> f){ //FIXME identity generator _steals_ the result out of `oldFuture` and puts into `deferredFuture`
-			if(auto noti = notifiDrop(f)){
-				auto redir = defer(Generator<T>(new IdentityGenerator<T>(f)));
-				notifiAdd(redir, *noti);
-				execute(redir);
-			}
+		template<typename T> void notify(Future<T> f){
+			work.push(f);
 		}
 	private:
 		std::condition_variable condWLE;
@@ -269,7 +245,10 @@ class Yengine {
 			return ret;
 		}
 		void threado(AFuture task){
-			if(task->state() > FutureState::Running) return; //Only suspended tasks are resumeable
+			if(task->state() == FutureState::Completed){ //completed outside futures (via notify)
+				if(auto naut = notifiDrop(task)) task = *naut; //chained future contains backref to the outside task and will steal the result itself like a good one
+				else return; //nothing to chain outside future with
+			} else if(task->state() > FutureState::Running) return; //Only suspended tasks are resumeable
 			//cont:
 			while(true)
 			{
