@@ -283,7 +283,7 @@ template<> Future<IAIOResource::ReadResult> IAIOResource::read<std::vector<char>
 		return completed(IAIOResource::ReadResult(std::move(ret)));
 	}
 	auto n2r = upto-readbuff.size();
-	return _read(n2r + OBS - n2r%OBS) >> [this, self = slf.lock(), n2r](auto rr){ return rr->mapOk([=](auto data){
+	return _read(n2r) >> [this, self = slf.lock(), n2r](auto rr){ return rr->mapOk([=](auto data){
 		std::vector<char> nd;
 		nd.reserve(readbuff.size() + std::min(n2r, data.size()));
 		MoveAppend(readbuff, nd);

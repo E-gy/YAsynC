@@ -221,7 +221,7 @@ template<typename PatIt> Future<IAIOResource::ReadResult> IAIOResource::read_(co
 				return *read<std::vector<char>>(j)->result();
 			}
 		}
-		auto gmd = _read(OBS);
+		auto gmd = _read(1);
 		awao = std::optional<Future<IAIOResource::ReadResult>>(gmd);
 		return gmd;
 	}, std::optional<Future<IAIOResource::ReadResult>>(std::nullopt)));
