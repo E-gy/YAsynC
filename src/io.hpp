@@ -26,6 +26,20 @@ namespace yasync::io {
 
 class IOYengine;
 
+/**
+ * Represents a resource whose state is managed (externally).
+ * A default implementation would simply close the handle for example.
+ * A reuseable resource might repuporse it instead.
+ * ...
+ */
+class IHandledResource {
+	public:
+		const ResourceHandle rh; //gotta go fast
+		IHandledResource(ResourceHandle r);
+		virtual ~IHandledResource() = 0;
+};
+using HandledResource = std::unique_ptr<IHandledResource>;
+
 #ifdef _WIN32
 struct IOCompletionInfo {
 	BOOL status;
@@ -251,11 +265,11 @@ class IOYengine {
 		fd_t const ioEpoll;
 		#endif
 		/**
-		 * Opens asynchronous resource on the handle.
+		 * Opens asynchronous IO on the handled resource.
 		 * @param r @consumes
 		 * @returns async resource
 		 */
-		IOResource taek(ResourceHandle r);
+		IOResource taek(HandledResource r);
 		result<IOResource, std::string> fileOpenRead(const std::string& path);
 		result<IOResource, std::string> fileOpenWrite(const std::string& path);
 		//TODO properly extendable for sockets

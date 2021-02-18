@@ -95,8 +95,11 @@ std::string printSysError(const std::string& message){
 	);
 }
 
+IHandledResource::IHandledResource(ResourceHandle r) : rh(r) {}
+IHandledResource::~IHandledResource(){}
+
 class FileResource : public IAIOResource {
-	ResourceHandle file;
+	HandledResource res;
 	std::array<char, DEFAULT_BUFFER_SIZE> buffer;
 	std::shared_ptr<OutsideFuture<IOCompletionInfo>> engif;
 	void notify(IOCompletionInfo inf){
@@ -133,21 +136,15 @@ class FileResource : public IAIOResource {
 	#endif
 	public:
 		friend class IOYengine;
-		FileResource(IOYengine* e, ResourceHandle rh) : IAIOResource(e), file(rh), buffer(), engif(new OutsideFuture<IOCompletionInfo>()) {
+		FileResource(IOYengine* e, HandledResource hr) : IAIOResource(e), res(std::move(hr)), buffer(), engif(new OutsideFuture<IOCompletionInfo>()) {
 			#ifdef _WIN32
-			CreateIoCompletionPort(file, e->ioCompletionPort, COMPLETION_KEY_IO, 0);
+			CreateIoCompletionPort(res->rh, e->ioCompletionPort, COMPLETION_KEY_IO, 0);
 			#else
 			#endif
 		}
 		FileResource(const FileResource& cpy) = delete;
 		FileResource(FileResource&& mov) = delete;
-		~FileResource(){
-			#ifdef _WIN32
-			if(file != INVALID_HANDLE_VALUE) CloseHandle(file);
-			#else
-			if(file >= 0) close(file);
-			#endif
-		}
+		~FileResource(){}
 		Future<ReadResult> _read(size_t bytes){
 			engif->s = FutureState::Running;
 			//self.get() == this   exists to memory-lock dangling IO resource to this lambda generator
@@ -171,7 +168,7 @@ class FileResource : public IAIOResource {
 					}
 				}
 				DWORD transferred = 0;
-				while(ReadFile(file, buffer.begin(), buffer.size(), &transferred, overlapped())){
+				while(ReadFile(res->rh, buffer.begin(), buffer.size(), &transferred, overlapped())){
 					data.insert(data.end(), buffer.begin(), buffer.begin() + transferred);
 					overlapped()->Offset += transferred;
 					if(bytes > 0 && data.size() >= bytes){
@@ -196,7 +193,7 @@ class FileResource : public IAIOResource {
 					int leve = *engif->r;
 					if(leve != EPOLLIN) return retSysError<std::vector<char>>("Epoll wrong event");
 					int transferred;
-					while((transferred = ::read(file, buffer.data(), buffer.size())) > 0){
+					while((transferred = ::read(res->rh, buffer.data(), buffer.size())) > 0){
 						data.insert(data.end(), buffer.begin(), buffer.begin()+transferred);
 						if(bytes > 0 && data.size() >= bytes){
 							done = true;
@@ -234,7 +231,7 @@ class FileResource : public IAIOResource {
 					}
 				}
 				DWORD transferred = 0;
-				while(WriteFile(file, data.data(), data.size(), &transferred, overlapped())){
+				while(WriteFile(res->rh, data.data(), data.size(), &transferred, overlapped())){
 					data.erase(data.begin(), data.begin()+transferred);
 					overlapped()->Offset += transferred;
 					if(data.empty()){
@@ -253,7 +250,7 @@ class FileResource : public IAIOResource {
 					int leve = *engif->r;
 					if(leve != EPOLLOUT) return retSysError<void>("Epoll wrong event");
 					int transferred;
-					while((transferred = ::write(file, data.data(), data.size())) >= 0){
+					while((transferred = ::write(res->rh, data.data(), data.size())) >= 0){
 						data.erase(data.begin(), data.begin()+transferred);
 						if(data.empty()){
 							done = true;
@@ -353,11 +350,23 @@ void IOYengine::iothreadwork(){
 	}
 }
 
-IOResource IOYengine::taek(ResourceHandle rh){
-	std::shared_ptr<FileResource> r(new FileResource(this, rh));
+IOResource IOYengine::taek(HandledResource rh){
+	std::shared_ptr<FileResource> r(new FileResource(this, std::move(rh)));
 	r->setSelf(r);
 	return r;
 }
+
+class HandledLocalFile : public IHandledResource {
+	public:
+		HandledLocalFile(ResourceHandle f) : IHandledResource(f) {}
+		~HandledLocalFile(){
+			#ifdef _WIN32
+			if(rh != INVALID_HANDLE_VALUE) CloseHandle(rh);
+			#else
+			if(rh >= 0) close(rh);
+			#endif
+		}
+};
 
 result<IOResource, std::string> IOYengine::fileOpenRead(const std::string& path){
 	ResourceHandle file;
@@ -368,7 +377,7 @@ result<IOResource, std::string> IOYengine::fileOpenRead(const std::string& path)
 	file = open(path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
 	if(file < 0) retSysError<IOResource>("Open file failed", errno);
 	#endif
-	return taek(file);
+	return taek(HandledResource(new HandledLocalFile(file)));
 }
 result<IOResource, std::string> IOYengine::fileOpenWrite(const std::string& path){
 	ResourceHandle file;
@@ -379,7 +388,7 @@ result<IOResource, std::string> IOYengine::fileOpenWrite(const std::string& path
 	file = open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_NONBLOCK | O_CLOEXEC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
 	if(file < 0) retSysError<IOResource>("Open file failed", errno);
 	#endif
-	return taek(file);
+	return taek(HandledResource(new HandledLocalFile(file)));
 }
 
 }
