@@ -68,7 +68,7 @@ template<typename T> T blawait(Yengine* engine, Future<T> f){
 	std::condition_variable cvDone;
 	engine <<= f >> [&](auto tres){
 		std::unique_lock lok(synch);
-		t = std::unique_ptr<T>(new T(std::move(tres.get())));
+		t = std::unique_ptr<T>(new T(std::move(tres)));
 		cvDone.notify_one();
 	};
 	std::unique_lock lok(synch);

@@ -24,7 +24,7 @@ template<> void blawait<void>(Yengine* engine, Future<void> f){
 	bool t = false;
 	std::mutex synch;
 	std::condition_variable cvDone;
-	engine <<= f >> [&]([[maybe_unused]] auto _void){
+	engine <<= f >> [&](){
 		std::unique_lock lok(synch);
 		t = true;
 		cvDone.notify_one();

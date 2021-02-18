@@ -269,7 +269,7 @@ class FileResource : public IAIOResource {
 
 template<> Future<IAIOResource::ReadResult> IAIOResource::read<std::vector<char>>(){
 	if(readbuff.empty()) return _read(0);
-	return _read(0) >> [this, self = slf.lock()](auto rr){ return rr->mapOk([this](auto data){
+	return _read(0) >> [this, self = slf.lock()](auto rr){ return rr.mapOk([this](auto data){
 		std::vector<char> nd;
 		nd.reserve(readbuff.size() + data.size());
 		MoveAppend(readbuff, nd);
@@ -284,7 +284,7 @@ template<> Future<IAIOResource::ReadResult> IAIOResource::read<std::vector<char>
 		return completed(IAIOResource::ReadResult(std::move(ret)));
 	}
 	auto n2r = upto-readbuff.size();
-	return _read(n2r) >> [this, self = slf.lock(), n2r](auto rr){ return rr->mapOk([=](auto data){
+	return _read(n2r) >> [this, self = slf.lock(), n2r](auto rr){ return rr.mapOk([=](auto data){
 		std::vector<char> nd;
 		nd.reserve(readbuff.size() + std::min(n2r, data.size()));
 		MoveAppend(readbuff, nd);
@@ -310,7 +310,7 @@ template<> Future<IAIOResource::WriteResult> IAIOResource::write<std::vector<cha
 IAIOResource::Writer::Writer(IOResource r) : resource(r), eodnot(new OutsideFuture<IAIOResource::WriteResult>()), lflush(completed(IAIOResource::WriteResult())) {}
 IAIOResource::Writer::~Writer(){
 	resource->engine->engine <<= flush() >> [res = resource, naut = eodnot](auto wr){
-		naut->r.emplace(*wr);
+		naut->r.emplace(wr);
 		naut->s = FutureState::Completed;
 		res->engine->engine->notify(std::dynamic_pointer_cast<IFutureT<IAIOResource::WriteResult>>(naut));
 	};
@@ -320,7 +320,7 @@ Future<IAIOResource::WriteResult> IAIOResource::Writer::flush(){
 	std::vector<char> buff;
 	std::swap(buff, buffer);
 	return lflush = (lflush >> [res = resource, buff](auto lr){
-		if(lr->error()) return completed(*lr);
+		if(lr.error()) return completed(lr);
 		else return res->write(buff);
 	});
 }

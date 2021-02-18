@@ -41,7 +41,7 @@ template<typename T> class IdentityGenerator : public IGeneratorT<T> {
 		std::variant<AFuture, something<T>> resume([[maybe_unused]] const Yengine* engine){
 			if(w->state() == FutureState::Completed || !(reqd = !reqd)){
 				if constexpr (std::is_same<T, void>::value) return something<void>();
-				else return something<T>(*(w->result()));
+				else return *w->result();
 			} else return w;
 		}
 };
@@ -56,9 +56,11 @@ template<typename V, typename U, typename F> class ChainingGenerator : public IG
 		std::variant<AFuture, something<V>> resume([[maybe_unused]] const Yengine* engine){
 			if(w->state() == FutureState::Completed || !(reqd = !reqd)){
 				if constexpr (std::is_same<V, void>::value){
-					f(*(w->result()));
+					if constexpr (std::is_same<U, void>::value) f();
+					else f(**w->result());
 					return something<void>();
-				} else return something<V>(f(*(w->result())));
+				} else if constexpr (std::is_same<U, void>::value) return something<V>(f());
+				else return something<V>(f(**w->result()));
 			} else return w;
 		}
 };
@@ -80,7 +82,9 @@ template<typename V, typename U, typename F> class ChainingWrappingGenerator : p
 					state = State::A0;
 					return awa;
 				case State::A0: {
-					Future<V> f1 = gf(*(awa->result()));
+					Future<V> f1;
+					if constexpr (std::is_same<U, void>::value) f1 = gf();
+					else f1 = gf(**awa->result());
 					nxt = f1;
 					[[fallthrough]];
 				}
@@ -121,8 +125,13 @@ template <typename V, typename U, typename F> Future<V> then_spec(Future<U> f, F
  * @returns @ref
  */
 template<typename U, typename F> auto then(Future<U> f, F map){
-	using V = std::decay_t<decltype(map(*(f->result())))>;
-	return then_spec(f, map, _typed<V>{});
+	if constexpr (std::is_same<U, void>::value){
+		using V = std::decay_t<decltype(map())>;
+		return then_spec(f, map, _typed<V>{});
+	} else {
+		using V = std::decay_t<decltype(map(**(f->result())))>;
+		return then_spec(f, map, _typed<V>{});
+	}
 }
 
 template<typename U, typename F> auto operator>>(Future<U> f, F map){

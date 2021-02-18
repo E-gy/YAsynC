@@ -78,8 +78,8 @@ class IAIOResource;
 using IOResource = std::shared_ptr<IAIOResource>;
 
 template<typename T> auto mapVecToT(){
-	if constexpr (std::is_same<T, std::vector<char>>::value) return [](auto r){ return r.get(); };
-	else return [](auto rr){ return rr->mapOk([](auto v){ return T(v.begin(), v.end()); }); };
+	if constexpr (std::is_same<T, std::vector<char>>::value) return [](auto r){ return r; };
+	else return [](auto rr){ return rr.mapOk([](auto v){ return T(v.begin(), v.end()); }); };
 }
 
 std::string printSysError(const std::string& message, syserr_t e);
