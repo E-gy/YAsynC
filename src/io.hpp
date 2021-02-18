@@ -272,7 +272,6 @@ class IOYengine {
 		IOResource taek(HandledResource r);
 		result<IOResource, std::string> fileOpenRead(const std::string& path);
 		result<IOResource, std::string> fileOpenWrite(const std::string& path);
-		//TODO properly extendable for sockets
 	private:
 		friend class IResource;
 		void iothreadwork();
