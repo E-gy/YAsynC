@@ -54,4 +54,25 @@ template<typename T> Future<T> asyncSleep(Yengine* engine, unsigned ms, T ret){
 	return f;
 }
 
+/**
+ * Blocks current thread until completion of a future (for a generating future, until a result is produced) on the engine
+ * DO _NOT_ USE FROM INSIDE ASYNC CODE!
+ * @param engine engine to block on
+ * @param f future to await
+ * @returns the result of the future when completed
+ */
+template<typename T> T blawait(Yengine* engine, Future<T> f){
+	std::unique_ptr<T> t;
+	std::mutex synch;
+	std::condition_variable cvDone;
+	engine <<= f >> [&](auto tres){
+		std::unique_lock lok(synch);
+		t = std::unique_ptr<T>(new T(std::move(tres.get())));
+		cvDone.notify_one();
+	};
+	std::unique_lock lok(synch);
+	while(!t.get()) cvDone.wait(lok);
+	return *t;
+}
+
 }
