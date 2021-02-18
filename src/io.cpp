@@ -115,7 +115,7 @@ class FileResource : public IAIOResource {
 		::epoll_event epm;
 		epm.events = (wr ? EPOLLOUT : EPOLLIN) | EPOLLONESHOT;
 		epm.data.ptr = this;
-		if(::epoll_ctl(engine->ioEpoll, EPOLL_CTL_ADD, file, &epm)){
+		if(::epoll_ctl(engine->ioEpoll, EPOLL_CTL_ADD, res->rh, &epm)){
 			if(errno == EPERM){
 				//The file does not support non-blocking io :(
 				//That means that all r/w will succeed (and block). So we report ourselves ready for IO, and off to EOD we go!
@@ -131,7 +131,7 @@ class FileResource : public IAIOResource {
 		::epoll_event epm;
 		epm.events = (wr ? EPOLLOUT : EPOLLIN) | EPOLLONESHOT;
 		epm.data.ptr = this;
-		return ::epoll_ctl(engine->ioEpoll, EPOLL_CTL_MOD, file, &epm) ? retSysError<void>("Register to epoll failed") : ROk<std::string>();
+		return ::epoll_ctl(engine->ioEpoll, EPOLL_CTL_MOD, res->rh, &epm) ? retSysError<void>("Register to epoll failed") : ROk<std::string>();
 	}
 	#endif
 	public:
