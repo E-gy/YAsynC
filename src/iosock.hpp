@@ -35,8 +35,6 @@ class SystemNetworkingStateControl {
 template<int SDomain, int SType, int SProto, typename AddressInfo, typename Acc> class AListeningSocket;
 template<int SDomain, int SType, int SProto, typename AddressInfo, typename Acc> using ListeningSocket = std::shared_ptr<AListeningSocket<SDomain, SType, SProto, AddressInfo, Acc>>;
 
-//TODO FIXME do NOT use ReleaseHanle for sockets, use shutdown/WSASendDisconnect + closesocket instead https://docs.microsoft.com/en-us/windows/win32/api/handleapi/nf-handleapi-closehandle 
-
 class AHandledStrayIOSocket : public IHandledResource {
 	public:
 		inline SocketHandle sock() const { return SocketHandle(rh); }
