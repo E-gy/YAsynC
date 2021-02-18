@@ -203,14 +203,16 @@ template<typename PatIt> Future<IAIOResource::ReadResult> IAIOResource::read_(co
 	return defer(lambdagen([this, self = slf.lock(), pattern = std::vector<char>(patBegin, patEnd)]([[maybe_unused]] const Yengine* engine, bool& done, std::optional<Future<IAIOResource::ReadResult>>& awao) -> std::variant<AFuture, something<IAIOResource::ReadResult>> {
 		if(done) return IAIOResource::ReadResult("Result already submitted!");
 		if(awao){
-			if((*awao)->state() == FutureState::Completed){
-				auto res = (*awao)->result()->getr();
+			auto gmd = *awao;
+			if(gmd->state() == FutureState::Completed){
+				auto res = gmd->result()->getr();
 				if(auto err = res->error()){
 					done = true;
 					return IAIOResource::ReadResult(*err);
 				}
-				readbuff.insert(readbuff.end(), res->ok()->begin(), res->ok()->end());
-			} else return *awao;
+				auto rd = *res->ok();
+				MoveAppend(rd, readbuff);
+			} else return gmd;
 		}
 		for(size_t i = 0; i < readbuff.size(); i++){
 			auto pat = pattern.begin();
@@ -222,7 +224,7 @@ template<typename PatIt> Future<IAIOResource::ReadResult> IAIOResource::read_(co
 			}
 		}
 		auto gmd = _read(1);
-		awao = std::optional<Future<IAIOResource::ReadResult>>(gmd);
+		awao.emplace(gmd);
 		return gmd;
 	}, std::optional<Future<IAIOResource::ReadResult>>(std::nullopt)));
 }
