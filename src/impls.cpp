@@ -3,7 +3,7 @@
 namespace yasync {
 
 bool RangeGenerator::done() const { return c >= e-1; }
-std::variant<AFuture, something<int>> RangeGenerator::resume([[maybe_unused]] const Yengine* eng){
+std::variant<AFuture, movonly<int>> RangeGenerator::resume([[maybe_unused]] const Yengine* eng){
 	c++;
 	return c;
 }
@@ -13,7 +13,6 @@ Future<void> asyncSleep(Yengine* engine, unsigned ms){
 	std::thread th([engine, ms](std::shared_ptr<OutsideFuture<void>> f){
 		std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 		f->s = FutureState::Completed;
-		f->r.emplace(something<void>());
 		engine->notify(std::dynamic_pointer_cast<IFutureT<void>>(f));
 	}, f);
 	th.detach();

@@ -1,8 +1,6 @@
 #pragma once
 
-#include <optional>
 #include <memory>
-#include "something.hpp"
 
 namespace yasync {
 
@@ -24,14 +22,44 @@ class IFuture {
 
 //TODO FIXME someone f'd up a lot of things. Futures' boxed containers cause waay too many copies. That's bad for large data.
 
+// template<typename T> using movonly = std::unique_ptr<T>;
+
+template<typename T> class movonly {
+	std::unique_ptr<T> t;
+	public:
+		movonly() : t() {}
+		movonly(T* pt) : t(pt) {}
+		movonly(const T& vt) : t(new T(vt)) {} 
+		movonly(T && vt) : t(new T(vt)) {}
+		~movonly() = default;
+		movonly(movonly && mov) noexcept { t = std::move(mov.t); }
+		movonly& operator=(movonly && mov) noexcept { t = std::move(mov.t); return *this; }
+		//no copy
+		movonly(const movonly& cpy) = delete;
+		movonly& operator=(const movonly& cpy) = delete;
+		auto operator*(){ return *t; }
+		auto operator->(){ return t.operator->; }
+};
+template<> class movonly<void> {
+	std::unique_ptr<void*> t;
+	public:
+		movonly(){}
+		~movonly() = default;
+		movonly(movonly &&) noexcept {}
+		movonly& operator=(movonly &&) noexcept { return *this; }
+		//no copy (still, yeah!)
+		movonly(const movonly& cpy) = delete;
+		movonly& operator=(const movonly& cpy) = delete;
+};
+
 template<typename T> class IFutureT : public IFuture {
 	public:
 		/**
-		 * The future owns the result, always.
-		 * This is reference accessor.
-		 * @returns @ref
+		 * Takes the result from the future.
+		 * May return <nothing> if the future is in invalid state
+		 * @returns @produces
 		 */
-		virtual std::optional<something<T>> result() = 0;
+		virtual movonly<T> result() = 0;
 };
 
 using AFuture = std::shared_ptr<IFuture>;

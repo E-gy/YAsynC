@@ -14,7 +14,7 @@ class RangeGenerator : public IGeneratorT<int> {
 	public:
 		RangeGenerator(int start, int end) : s(start), e(end), c(s-1) {}
 		bool done() const;
-		std::variant<AFuture, something<int>> resume(const Yengine* eng);
+		std::variant<AFuture, movonly<int>> resume(const Yengine* eng);
 };
 
 /*class UnFuture : public Future<void> {
@@ -31,25 +31,28 @@ template<typename T> class OutsideFuture : public IFutureT<T> {
 		OutsideFuture(){}
 		FutureState s = FutureState::Running;
 		FutureState state(){ return s; }
-		std::optional<something<T>> r;
-		std::optional<something<T>> result(){ return r; }
+		movonly<T> r;
+		movonly<T> result(){
+			std::cout << "result stolen from " << this << " [outside]\n";
+			return std::move(r);
+		}
 };
 
-template<typename T> Future<T> completed(T t){
+template<typename T> Future<T> completed(const T& t){
 	std::shared_ptr<OutsideFuture<T>> vf(new OutsideFuture<T>());
 	vf->s = FutureState::Completed;
-	vf->r.emplace(something<T>(std::move(t)));
+	vf->r.reset(new T(t));
 	return vf;
 } 
 
 template<typename T> Future<T> asyncSleep(Yengine* engine, unsigned ms, T ret){
 	std::shared_ptr<OutsideFuture<T>> f(new OutsideFuture<T>());
-	std::thread th([engine, ms](std::shared_ptr<OutsideFuture<T>> f, something<T> rt){
+	std::thread th([engine, ms](std::shared_ptr<OutsideFuture<T>> f, auto rt){
 		std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 		f->s = FutureState::Completed;
-		f->r.emplace(rt);
+		f->r = std::move(rt);
 		engine->notify(std::dynamic_pointer_cast<IFutureT<T>>(f));
-	}, f, something<T>(ret));
+	}, f, movonly<T>(new T(ret)));
 	th.detach();
 	return f;
 }

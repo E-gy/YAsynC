@@ -2,7 +2,6 @@
 
 #include <variant>
 #include <memory>
-#include "something.hpp"
 #include "future.hpp"
 
 namespace yasync {
@@ -30,7 +29,7 @@ template<typename T> class IGeneratorT {
 		 * @param engine @ref async engine to launch tasks in parallel
 		 * @returns @produces the next value if ready, the future this generator is awaiting for otherwise
 		 */
-		virtual std::variant<AFuture, something<T>> resume(const Yengine* engine) = 0;
+		virtual std::variant<AFuture, movonly<T>> resume(const Yengine* engine) = 0;
 };
 
 template<typename T> using Generator = std::shared_ptr<IGeneratorT<T>>;

@@ -11,16 +11,28 @@
 #include "future.hpp"
 #include "threadsafequeue.hpp"
 
+#include <iostream>
+
 namespace yasync {
 
 template<typename T> class FutureG : public IFutureT<T> {
-	public:
-		Generator<T> gen;
+	protected:
 		FutureState s = FutureState::Suspended;
-		std::optional<something<T>> val;
+		movonly<T> val;
+	public:
+		const Generator<T> gen;
 		FutureG(Generator<T> g) : gen(g) {}
 		FutureState state(){ return s; }
-		std::optional<something<T>> result(){ return val; }
+		movonly<T> result(){
+			std::cout << "result stolen from " << this << "\n";
+			return std::move(val);
+		}
+		void set(FutureState state){ s = state; }
+		void set(FutureState state, movonly<T> && v){
+			set(state);
+			val = std::move(v);
+			std::cout << "result put into " << this << "\n";
+		}
 };
 
 /**
@@ -38,10 +50,10 @@ template<typename T> class IdentityGenerator : public IGeneratorT<T> {
 	public:
 		IdentityGenerator(Future<T> awa) : w(awa) {}
 		bool done() const { return reqd && w->state() == FutureState::Completed; }
-		std::variant<AFuture, something<T>> resume([[maybe_unused]] const Yengine* engine){
+		std::variant<AFuture, movonly<T>> resume([[maybe_unused]] const Yengine* engine){
 			if(w->state() == FutureState::Completed || !(reqd = !reqd)){
-				if constexpr (std::is_same<T, void>::value) return something<void>();
-				else return *w->result();
+				if constexpr (std::is_same<T, void>::value) return movonly<void>();
+				else return w->result();
 			} else return w;
 		}
 };
@@ -53,14 +65,14 @@ template<typename V, typename U, typename F> class ChainingGenerator : public IG
 	public:
 		ChainingGenerator(Future<U> awa, F map) : w(awa), f(map) {}
 		bool done() const { return reqd && w->state() == FutureState::Completed; }
-		std::variant<AFuture, something<V>> resume([[maybe_unused]] const Yengine* engine){
+		std::variant<AFuture, movonly<V>> resume([[maybe_unused]] const Yengine* engine){
 			if(w->state() == FutureState::Completed || !(reqd = !reqd)){
 				if constexpr (std::is_same<V, void>::value){
 					if constexpr (std::is_same<U, void>::value) f();
-					else f(**w->result());
-					return something<void>();
-				} else if constexpr (std::is_same<U, void>::value) return something<V>(f());
-				else return something<V>(f(**w->result()));
+					else f(*w->result());
+					return movonly<void>();
+				} else if constexpr (std::is_same<U, void>::value) return movonly<V>(f());
+				else return movonly<V>(f(*w->result()));
 			} else return w;
 		}
 };
@@ -76,7 +88,7 @@ template<typename V, typename U, typename F> class ChainingWrappingGenerator : p
 	public:
 		ChainingWrappingGenerator(Future<U> w, F f) : awa(w), gf(f) {}
 		bool done() const { return state == State::Fi; }
-		std::variant<AFuture, something<V>> resume([[maybe_unused]] const Yengine* engine){
+		std::variant<AFuture, movonly<V>> resume([[maybe_unused]] const Yengine* engine){
 			switch(state){
 				case State::I:
 					state = State::A0;
@@ -84,7 +96,7 @@ template<typename V, typename U, typename F> class ChainingWrappingGenerator : p
 				case State::A0: {
 					Future<V> f1;
 					if constexpr (std::is_same<U, void>::value) f1 = gf();
-					else f1 = gf(**awa->result());
+					else f1 = gf(*awa->result());
 					nxt = f1;
 					[[fallthrough]];
 				}
@@ -100,10 +112,10 @@ template<typename V, typename U, typename F> class ChainingWrappingGenerator : p
 							nxt = std::nullopt;
 						}
 					else state = State::A1r;
-					return *(f1->result());
+					return f1->result();
 				}
 				case State::Fi:
-					return *((*nxt)->result());
+					return (*nxt)->result();
 				default: //never
 					return awa;
 			}
@@ -129,7 +141,7 @@ template<typename U, typename F> auto then(Future<U> f, F map){
 		using V = std::decay_t<decltype(map())>;
 		return then_spec(f, map, _typed<V>{});
 	} else {
-		using V = std::decay_t<decltype(map(**(f->result())))>;
+		using V = std::decay_t<decltype(map(*f->result()))>;
 		return then_spec(f, map, _typed<V>{});
 	}
 }
@@ -145,12 +157,12 @@ template<typename V, typename F, typename... State> class GeneratorLGenerator : 
 	public:
 		GeneratorLGenerator(std::tuple<State...> s, F gen) : state(s), g(gen){}
 		bool done() const { return d; }
-		std::variant<AFuture, something<V>> resume(const Yengine* engine){
+		std::variant<AFuture, movonly<V>> resume(const Yengine* engine){
 			return g(engine, d, state);
 		}
 };
 
-template<typename V, typename F, typename... State> Generator<V> lambdagen_spec(_typed<std::variant<AFuture, something<V>>>, F f, State... args){
+template<typename V, typename F, typename... State> Generator<V> lambdagen_spec(_typed<std::variant<AFuture, movonly<V>>>, F f, State... args){
 	return Generator<V>(new GeneratorLGenerator<V, F, State...>(std::tuple<State...>(args...), f));
 }
 
@@ -168,12 +180,12 @@ template<typename V, typename F, typename S> class GeneratorLGenerator<V, F, S> 
 	public:
 		GeneratorLGenerator(S s, F gen) : state(s), g(gen){}
 		bool done() const { return d; }
-		std::variant<AFuture, something<V>> resume(const Yengine* engine){
+		std::variant<AFuture, movonly<V>> resume(const Yengine* engine){
 			return g(engine, d, state);
 		}
 };
 
-template<typename V, typename F, typename S> Generator<V> lambdagen_spec(_typed<std::variant<AFuture, something<V>>>, F f, S arg){
+template<typename V, typename F, typename S> Generator<V> lambdagen_spec(_typed<std::variant<AFuture, movonly<V>>>, F f, S arg){
 	return Generator<V>(new GeneratorLGenerator<V, F, S>(arg, f));
 }
 
@@ -214,7 +226,7 @@ class Yengine {
 		 */ 
 		template<typename T> Future<T> execute(Future<T> f){
 			auto ft = std::dynamic_pointer_cast<FutureG<T>>(f);
-			ft->s = FutureState::Queued;
+			ft->set(FutureState::Queued);
 			work.push(f);
 			return f;
 		}
@@ -233,7 +245,7 @@ class Yengine {
 		 * Notifies the engine of completion of an external future.
 		 * Returns almost immediately - actual processing of the notification will happen internally.
 		 */
-		template<typename T> void notify(Future<T> f){
+		template<typename T> void notify(Future<T> f){ //FIXME identity generator _steals_ the result out of `oldFuture` and puts into `deferredFuture`
 			if(auto noti = notifiDrop(f)){
 				auto redir = defer(Generator<T>(new IdentityGenerator<T>(f)));
 				notifiAdd(redir, *noti);
@@ -262,7 +274,7 @@ class Yengine {
 			while(true)
 			{
 			auto gent = (FutureG<void*>*) task.get();
-			gent->s = FutureState::Running;
+			gent->set(FutureState::Running);
 			auto g = gent->gen->resume(this);
 			if(auto awa = std::get_if<AFuture>(&g)){
 				switch((*awa)->state()){
@@ -270,7 +282,7 @@ class Yengine {
 						// goto cont;
 						break;
 					case FutureState::Suspended:
-						gent->s = FutureState::Awaiting;
+						gent->set(FutureState::Awaiting);
 						notifiAdd(*awa, task);
 						task = *awa;
 						// goto cont;
@@ -278,13 +290,12 @@ class Yengine {
 					case FutureState::Queued: //This is stoopid, but hey we don't want to sync what we don't need, so it'll wait
 					case FutureState::Awaiting:
 					case FutureState::Running:
-						gent->s = FutureState::Awaiting;
+						gent->set(FutureState::Awaiting);
 						notifiAdd(*awa, task);
 						return;
 				}
 			} else {
-				gent->s = gent->gen->done() ? FutureState::Completed : FutureState::Suspended;
-				gent->val.emplace(std::move(*(std::get_if<something<void*>>(&g)))); //do NOT!!! copy. C++ compiler reaaally wants to copy. NO!
+				gent->set(gent->gen->done() ? FutureState::Completed : FutureState::Suspended, std::move(std::get<movonly<void*>>(g))); //do NOT!!! copy. C++ compiler reaaally wants to copy. NO!
 				//#BeLazy: Whether we're done or not, drop from notifications. If we're done, well that's it. If we aren't, someone up in the pipeline will await for us at some point, setting up the notifications once again.
 				if(auto naut = notifiDrop(task)) task = *naut; //Proceed up the await chain immediately
 				else return;
