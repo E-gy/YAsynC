@@ -28,17 +28,25 @@ class RangeGenerator : public IGeneratorT<int> {
 
 template<typename T> class OutsideFuture : public IFutureT<T> {
 	public:
+		bool d = false;
+		something<T> r;
 		OutsideFuture(){}
-		FutureState s = FutureState::Running;
-		FutureState state(){ return s; }
-		std::optional<something<T>> r;
-		std::optional<something<T>> result(){ return r; }
+		FutureState state(){ return d ? FutureState::Completed : FutureState::Running; }
+		std::optional<something<T>*> result(){ return d ? std::optional(&r) : std::nullopt; }
+		something<T>&& taker(){ return std::move(r); }
+		void setDone(something<T>&& res){
+			d = true;
+			r = res;
+		}
+		void setDone(const T& res){ setDone(something<T>(res)); }
+		void setUndone(){
+			d = false;
+		}
 };
 
 template<typename T> Future<T> completed(T t){
 	std::shared_ptr<OutsideFuture<T>> vf(new OutsideFuture<T>());
-	vf->s = FutureState::Completed;
-	vf->r.emplace(something<T>(std::move(t)));
+	vf->setDone(t);
 	return vf;
 } 
 
@@ -46,8 +54,7 @@ template<typename T> Future<T> asyncSleep(Yengine* engine, unsigned ms, T ret){
 	std::shared_ptr<OutsideFuture<T>> f(new OutsideFuture<T>());
 	std::thread th([engine, ms](std::shared_ptr<OutsideFuture<T>> f, something<T> rt){
 		std::this_thread::sleep_for(std::chrono::milliseconds(ms));
-		f->s = FutureState::Completed;
-		f->r.emplace(rt);
+		f->setDone(rt);
 		engine->notify(std::dynamic_pointer_cast<IFutureT<T>>(f));
 	}, f, something<T>(ret));
 	th.detach();

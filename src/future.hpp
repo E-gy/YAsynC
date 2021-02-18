@@ -29,7 +29,14 @@ template<typename T> class IFutureT : public IFuture {
 		 * This is reference accessor.
 		 * @returns @ref
 		 */
-		virtual std::optional<something<T>> result() = 0;
+		virtual std::optional<something<T>*> result() = 0;
+		/**
+		 * The future owns the result, always.
+		 * Takes the result out of the future.
+		 * Make sure the future has a result first.
+		 * @returns @rvalue
+		 */
+		virtual something<T>&& taker() = 0;
 };
 
 using AFuture = std::shared_ptr<IFuture>;
