@@ -303,9 +303,7 @@ class Yengine {
 			}
 		}
 		void threadwork(){
-			while(auto w = work.pop()){ //TODO !closed
-				threado(*w);
-			}
+			while(auto w = work.pop()) threado(*w);
 		}
 };
 
