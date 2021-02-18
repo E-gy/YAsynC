@@ -53,6 +53,7 @@ template<typename T> Future<T> asyncSleep(Yengine* engine, unsigned ms, T ret){
 	th.detach();
 	return f;
 }
+Future<void> asyncSleep(Yengine* engine, unsigned ms);
 
 /**
  * Blocks current thread until completion of a future (for a generating future, until a result is produced) on the engine
@@ -74,5 +75,6 @@ template<typename T> T blawait(Yengine* engine, Future<T> f){
 	while(!t.get()) cvDone.wait(lok);
 	return *t;
 }
+template<> void blawait<void>(Yengine* engine, Future<void> f);
 
 }
