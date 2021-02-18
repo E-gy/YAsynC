@@ -103,7 +103,7 @@ class FileResource : public IAIOResource {
 	std::array<char, DEFAULT_BUFFER_SIZE> buffer;
 	std::shared_ptr<OutsideFuture<IOCompletionInfo>> engif;
 	void notify(IOCompletionInfo inf){
-		engif->r.emplace(inf);
+		engif->r = inf;
 		engif->s = FutureState::Completed;
 		engine->engine->notify(std::dynamic_pointer_cast<IFutureT<IOCompletionInfo>>(engif));
 	}
@@ -119,7 +119,7 @@ class FileResource : public IAIOResource {
 			if(errno == EPERM){
 				//The file does not support non-blocking io :(
 				//That means that all r/w will succeed (and block). So we report ourselves ready for IO, and off to EOD we go!
-				engif->r.emplace(wr ? EPOLLOUT : EPOLLIN);
+				engif->r = wr ? EPOLLOUT : EPOLLIN;
 				engif->s = FutureState::Completed;
 				return !(reged = true);
 			} else return retSysError<bool>("Register to epoll failed");
@@ -148,7 +148,7 @@ class FileResource : public IAIOResource {
 		Future<ReadResult> _read(size_t bytes){
 			engif->s = FutureState::Running;
 			//self.get() == this   exists to memory-lock dangling IO resource to this lambda generator
-			return defer(lambdagen([this, self = slf.lock(), bytes]([[maybe_unused]] const Yengine* engine, bool& done, std::vector<char>& data) -> std::variant<AFuture, something<ReadResult>> {
+			return defer(lambdagen([this, self = slf.lock(), bytes]([[maybe_unused]] const Yengine* engine, bool& done, std::vector<char>& data) -> std::variant<AFuture, movonly<ReadResult>> {
 				if(done) return ROk<std::vector<char>, std::string>(data);
 				#ifdef _WIN32 //TODO FIXME a UB lives somewhere in here, appearing only on large data reads
 				if(engif->s == FutureState::Completed){
@@ -214,7 +214,7 @@ class FileResource : public IAIOResource {
 		}
 		Future<WriteResult> _write(std::vector<char>&& data){
 			engif->s = FutureState::Running;
-			return defer(lambdagen([this, self = slf.lock()]([[maybe_unused]] const Yengine* engine, bool& done, std::vector<char>& data) -> std::variant<AFuture, something<WriteResult>> {
+			return defer(lambdagen([this, self = slf.lock()]([[maybe_unused]] const Yengine* engine, bool& done, std::vector<char>& data) -> std::variant<AFuture, movonly<WriteResult>> {
 				if(data.empty()) done = true;
 				if(done) return ROk<std::string>();
 				#ifdef _WIN32
@@ -310,7 +310,7 @@ template<> Future<IAIOResource::WriteResult> IAIOResource::write<std::vector<cha
 IAIOResource::Writer::Writer(IOResource r) : resource(r), eodnot(new OutsideFuture<IAIOResource::WriteResult>()), lflush(completed(IAIOResource::WriteResult())) {}
 IAIOResource::Writer::~Writer(){
 	resource->engine->engine <<= flush() >> [res = resource, naut = eodnot](auto wr){
-		naut->r.emplace(wr);
+		naut->r = wr;
 		naut->s = FutureState::Completed;
 		res->engine->engine->notify(std::dynamic_pointer_cast<IFutureT<IAIOResource::WriteResult>>(naut));
 	};

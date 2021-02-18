@@ -79,7 +79,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Acc>
 		};
 		std::shared_ptr<OutsideFuture<ListenEvent>> engif;
 		void notify(ListenEvent e){
-			engif->r.emplace(e);
+			engif->r = e;
 			engif->s = FutureState::Completed;
 			engine->engine->notify(std::dynamic_pointer_cast<IFutureT<ListenEvent>>(engif));
 		}
@@ -133,11 +133,12 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Acc>
 			if(::listen(sock, SOMAXCONN) == SOCKET_ERROR) return completed<ListenResult>(retSysNetError<void>("WSA listen failed"));
 			#else
 			#endif
-			return defer(lambdagen([this, self = slf.lock()]([[maybe_unused]] const Yengine* _engine, bool& done, [[maybe_unused]] int _un) -> std::variant<AFuture, something<ListenResult>>{
+			return defer(lambdagen([this, self = slf.lock()]([[maybe_unused]] const Yengine* _engine, bool& done, [[maybe_unused]] int _un) -> std::variant<AFuture, movonly<ListenResult>>{
 				if(done) return ROk<std::string>();
 				if(engif->s == FutureState::Completed){
+					auto event = engif->result();
 					engif->s = FutureState::Running;
-					switch((*engif->r)->type){
+					switch(event->type){
 						case ListenEventType::Accept:{
 							#ifdef _WIN32
 							if(::setsockopt(lconn->sock(), SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, reinterpret_cast<char*>(&sock), sizeof(sock)) == SOCKET_ERROR) return retSysNetError<void>("Set accepting socket accept failed");
@@ -148,7 +149,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Acc>
 							break;
 						}
 						case ListenEventType::Error:
-							return retSysNetError<void>("Async accept error", (*engif->r)->err);
+							return retSysNetError<void>("Async accept error", event->err);
 						case ListenEventType::Close:
 							done = true;
 							close();

@@ -214,17 +214,17 @@ template<typename PatIt> Future<IAIOResource::ReadResult> IAIOResource::read_(co
 		for(; j < readbuff.size() && pat != patEnd; j++, pat++) if(readbuff[j] != *pat) break;
 		if(pat == patEnd) return read<std::vector<char>>(j);
 	}
-	return defer(lambdagen([this, self = slf.lock(), pattern = std::vector<char>(patBegin, patEnd)]([[maybe_unused]] const Yengine* engine, bool& done, std::optional<Future<IAIOResource::ReadResult>>& awao) -> std::variant<AFuture, something<IAIOResource::ReadResult>> {
+	return defer(lambdagen([this, self = slf.lock(), pattern = std::vector<char>(patBegin, patEnd)]([[maybe_unused]] const Yengine* engine, bool& done, std::optional<Future<IAIOResource::ReadResult>>& awao) -> std::variant<AFuture, movonly<IAIOResource::ReadResult>> {
 		if(done) return IAIOResource::ReadResult("Result already submitted!");
 		if(awao){
 			auto gmd = *awao;
 			if(gmd->state() == FutureState::Completed){
-				auto res = gmd->result()->get();
-				if(auto err = res.error()){
+				auto res = gmd->result();
+				if(auto err = res->error()){
 					done = true;
 					return IAIOResource::ReadResult(*err);
 				}
-				auto rd = *res.ok();
+				auto rd = *res->ok();
 				MoveAppend(rd, readbuff);
 			} else return gmd;
 		}
