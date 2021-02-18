@@ -171,7 +171,7 @@ class FileResource : public IAIOResource {
 					}
 				}
 				DWORD transferred = 0;
-				while(ReadFile(file, buffer.begin(), bytes == 0 ? buffer.size() : std::min(buffer.size(), bytes - data.size()), &transferred, overlapped())){
+				while(ReadFile(file, buffer.begin(), buffer.size(), &transferred, overlapped())){
 					data.insert(data.end(), buffer.begin(), buffer.begin() + transferred);
 					overlapped()->Offset += transferred;
 					if(bytes > 0 && data.size() >= bytes){
@@ -196,7 +196,7 @@ class FileResource : public IAIOResource {
 					int leve = *engif->r;
 					if(leve != EPOLLIN) return retSysError<std::vector<char>>("Epoll wrong event");
 					int transferred;
-					while((transferred = ::read(file, buffer.data(), bytes == 0 ? buffer.size() : std::min(buffer.size(), bytes - data.size()))) > 0){
+					while((transferred = ::read(file, buffer.data(), buffer.size())) > 0){
 						data.insert(data.end(), buffer.begin(), buffer.begin()+transferred);
 						if(bytes > 0 && data.size() >= bytes){
 							done = true;

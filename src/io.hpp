@@ -74,17 +74,16 @@ template<typename S> result<S, std::string> retSysError(const std::string& messa
 template<typename S> result<S, std::string> retSysError(const std::string& message){ return RError<S, std::string>(printSysError(message)); }
 
 class IAIOResource : public IResource {
-	/**
-	 * Optimal [IO data] Block Size
-	 */
-	static constexpr size_t OBS = 4096;
 	protected:
 		IAIOResource(IOYengine* e) : engine(e){}
 		std::weak_ptr<IAIOResource> slf;
 		auto setSelf(std::shared_ptr<IAIOResource> self){ return slf = self; }
 		using ReadResult = result<std::vector<char>, std::string>;
 		/**
-		 * Reads up to the number of bytes requested, or EOD (if unspecified), from the resource.
+		 * Reads _at least_ the number of bytes requested, or until EOD is reached.
+		 * If no bytes are requested, read until EOD.
+		 * Effectively, a request of single byte read is equivalent to the read of one optimal buffer unit of associated resource.
+		 * Unbuffered, all and only data acquired from underlying resource _including data beyond requested size_ must be returned.
 		 * @param bytes number of bytes to read, 0 for unlimited
 		 * @returns result of the read
 		 */
