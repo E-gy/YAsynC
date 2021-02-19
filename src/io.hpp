@@ -8,6 +8,7 @@
 #include "result.hpp"
 #include "util.hpp"
 #include "impls.hpp"
+#include "syserr.hpp"
 #include <sstream>
 
 using fd_t = int;
@@ -16,10 +17,8 @@ using fd_t = int;
 //https://gist.github.com/abdul-sami/23e1321c550dc94a9558
 #include <windows.h>
 using ResourceHandle = HANDLE;
-using syserr_t = DWORD;
 #else
 using ResourceHandle = fd_t;
-using syserr_t = int;
 #endif
 
 namespace yasync::io {
@@ -81,11 +80,6 @@ template<typename T> auto mapVecToT(){
 	if constexpr (std::is_same<T, std::vector<char>>::value) return [](auto r){ return r; };
 	else return [](auto rr){ return rr.mapOk([](auto v){ return T(v.begin(), v.end()); }); };
 }
-
-std::string printSysError(const std::string& message, syserr_t e);
-std::string printSysError(const std::string& message);
-template<typename R> R retSysError(const std::string& message, syserr_t e){ return R::Err(printSysError(message, e)); }
-template<typename R> R retSysError(const std::string& message){ return R::Err(printSysError(message)); }
 
 class IAIOResource : public IResource {
 	protected:
