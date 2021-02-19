@@ -21,8 +21,8 @@ using sysneterr_t = int;
 
 std::string printSysNetError(const std::string& message, sysneterr_t e);
 std::string printSysNetError(const std::string& message);
-template<typename S> result<S, std::string> retSysNetError(const std::string& message, sysneterr_t e){ return RError<S, std::string>(printSysNetError(message, e)); }
-template<typename S> result<S, std::string> retSysNetError(const std::string& message){ return RError<S, std::string>(printSysNetError(message)); }
+template<typename S> result<S, std::string> retSysNetError(const std::string& message, sysneterr_t e){ return RErr<S, std::string>(printSysNetError(message, e)); }
+template<typename S> result<S, std::string> retSysNetError(const std::string& message){ return RErr<S, std::string>(printSysNetError(message)); }
 
 class SystemNetworkingStateControl {
 	public:
@@ -154,7 +154,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Acc>
 							done = true;
 							close();
 							return ROk<std::string>();
-						default: return RError<void, std::string>("Received unknown event");
+						default: return RErr<void, std::string>("Received unknown event");
 					}
 				}
 				#ifdef _WIN32

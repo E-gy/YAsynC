@@ -7,7 +7,7 @@ template<typename S, typename E> class result;
 
 template<typename S, typename E> result<S, E> ROk(const S& ok){ return result<S, E>(ok); }
 template<typename E> result<void, E> ROk(){ return result<void, E>(); }
-template<typename S, typename E> result<S, E> RError(const E& err){ return result<S, E>(err); }
+template<typename S, typename E> result<S, E> RErr(const E& err){ return result<S, E>(err); }
 template<typename S> result<S, void> RError(){ return result<S, void>(); }
 
 template<typename S, typename E> class result {
@@ -20,10 +20,10 @@ template<typename S, typename E> class result {
 		bool isOk() const { return res.index() == 0; }
 		bool isError() const { return res.index() == 1; }
 		std::optional<S> ok() const { if(auto r = std::get_if<S>(&res)) return *r; else return std::nullopt; }
-		std::optional<E> error() const { if(auto r = std::get_if<E>(&res)) return *r; else return std::nullopt; }
+		std::optional<E> err() const { if(auto r = std::get_if<E>(&res)) return *r; else return std::nullopt; }
 		operator bool() const { return isOk(); }
-		template<typename U, typename F> result<U, E> mapOk_(F f) const { if(auto r = std::get_if<S>(&res)) return ROk<U, E>(f(*r)); else return RError<U, E>(*error()); }
-		template<typename V, typename F> result<S, V> mapError_(F f) const { if(auto r = std::get_if<E>(&res)) return RError<S, V>(f(*r)); else return ROk<S, V>(*ok()); }
+		template<typename U, typename F> result<U, E> mapOk_(F f) const { if(auto r = std::get_if<S>(&res)) return ROk<U, E>(f(*r)); else return RErr<U, E>(*err()); }
+		template<typename V, typename F> result<S, V> mapError_(F f) const { if(auto r = std::get_if<E>(&res)) return RErr<S, V>(f(*r)); else return ROk<S, V>(*ok()); }
 		template<typename F> auto mapOk(F f) const {
 			using U = std::decay_t<decltype(f(*std::get_if<S>(&res)))>;
 			return mapOk_<U, F>(f);
@@ -53,15 +53,15 @@ template<typename S> class result<S, void> {
 		}
 };
 template<typename E> class result<void, E> {
-	std::optional<E> err;
+	std::optional<E> error;
 	public:
-		result() : err() {}
-		result(const E& e) : err(e) {}
-		bool isOk() const { return !err.has_value(); }
-		bool isError() const { return err.has_value(); }
-		std::optional<E> error() const { return err; }
-		template<typename U, typename F> result<U, E> mapOk_(F f) const { if(isOk()) return ROk<U, E>(f()); else return RError<U, E>(*error()); }
-		template<typename V, typename F> result<void, V> mapError_(F f) const { if(auto r = error()) return RError<void, V>(f(*r)); else return ROk<void, V>(); }
+		result() : error() {}
+		result(const E& e) : error(e) {}
+		bool isOk() const { return !error.has_value(); }
+		bool isError() const { return error.has_value(); }
+		std::optional<E> err() const { return error; }
+		template<typename U, typename F> result<U, E> mapOk_(F f) const { if(isOk()) return ROk<U, E>(f()); else return RErr<U, E>(*err()); }
+		template<typename V, typename F> result<void, V> mapError_(F f) const { if(auto r = err()) return RErr<void, V>(f(*r)); else return ROk<void, V>(); }
 		template<typename F> auto mapOk(F f) const {
 			using U = std::decay_t<decltype(f())>;
 			return mapOk_<U, F>(f);

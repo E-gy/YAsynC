@@ -84,8 +84,8 @@ template<typename T> auto mapVecToT(){
 
 std::string printSysError(const std::string& message, syserr_t e);
 std::string printSysError(const std::string& message);
-template<typename S> result<S, std::string> retSysError(const std::string& message, syserr_t e){ return RError<S, std::string>(printSysError(message, e)); }
-template<typename S> result<S, std::string> retSysError(const std::string& message){ return RError<S, std::string>(printSysError(message)); }
+template<typename S> result<S, std::string> retSysError(const std::string& message, syserr_t e){ return RErr<S, std::string>(printSysError(message, e)); }
+template<typename S> result<S, std::string> retSysError(const std::string& message){ return RErr<S, std::string>(printSysError(message)); }
 
 class IAIOResource : public IResource {
 	protected:
@@ -220,7 +220,7 @@ template<typename PatIt> Future<IAIOResource::ReadResult> IAIOResource::read_(co
 			auto gmd = *awao;
 			if(gmd->state() == FutureState::Completed){
 				auto res = gmd->result();
-				if(auto err = res->error()){
+				if(auto err = res->err()){
 					done = true;
 					return IAIOResource::ReadResult(*err);
 				}

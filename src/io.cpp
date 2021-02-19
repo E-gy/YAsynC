@@ -320,7 +320,7 @@ Future<IAIOResource::WriteResult> IAIOResource::Writer::flush(){
 	std::vector<char> buff;
 	std::swap(buff, buffer);
 	return lflush = (lflush >> [res = resource, buff](auto lr){
-		if(lr.error()) return completed(lr);
+		if(lr.err()) return completed(lr);
 		else return res->write(buff);
 	});
 }

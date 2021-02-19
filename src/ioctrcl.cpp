@@ -31,7 +31,7 @@ BOOL WINAPI ctrlcHandler(DWORD sig){
 result<Future<void>, std::string> onCtrlC(Yengine* engine){
 	stahp = false;
 	#ifdef _WIN32
-	if(ctrlcEvent != INVALID_HANDLE_VALUE) return RError<Future<void>, std::string>("ctrl+c handler already set!");
+	if(ctrlcEvent != INVALID_HANDLE_VALUE) return RErr<Future<void>, std::string>("ctrl+c handler already set!");
 	ctrlcEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
 	if(!SetConsoleCtrlHandler(ctrlcHandler, true)) return retSysError<Future<void>>("Set ctrl+c handler failed");
 	#else
