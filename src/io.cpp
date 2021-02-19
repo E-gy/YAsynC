@@ -19,6 +19,18 @@ constexpr size_t DEFAULT_BUFFER_SIZE = 4096;
 
 namespace yasync::io {
 
+class StandardHandledResource : public IHandledResource {
+	public:
+		StandardHandledResource(ResourceHandle f) : IHandledResource(f) {}
+		~StandardHandledResource(){
+			#ifdef _WIN32
+			if(rh != INVALID_HANDLE_VALUE) CloseHandle(rh);
+			#else
+			if(rh >= 0) close(rh);
+			#endif
+		}
+};
+
 IOYengine::IOYengine(Yengine* e) : engine(e),
 	#ifdef _WIN32
 	ioCompletionPort(CreateIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, ioThreads))
@@ -372,18 +384,6 @@ IOResource IOYengine::taek(HandledResource rh){
 	return r;
 }
 
-class HandledLocalFile : public IHandledResource {
-	public:
-		HandledLocalFile(ResourceHandle f) : IHandledResource(f) {}
-		~HandledLocalFile(){
-			#ifdef _WIN32
-			if(rh != INVALID_HANDLE_VALUE) CloseHandle(rh);
-			#else
-			if(rh >= 0) close(rh);
-			#endif
-		}
-};
-
 FileOpenResult fileOpenRead(IOYengine* engine, const std::string& path){
 	ResourceHandle file;
 	#ifdef _WIN32
@@ -393,7 +393,7 @@ FileOpenResult fileOpenRead(IOYengine* engine, const std::string& path){
 	file = open(path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
 	if(file < 0) retSysError<FileOpenResult>("Open file failed", errno);
 	#endif
-	return engine->taek(HandledResource(new HandledLocalFile(file)));
+	return engine->taek(HandledResource(new StandardHandledResource(file)));
 }
 FileOpenResult fileOpenWrite(IOYengine* engine, const std::string& path){
 	ResourceHandle file;
@@ -404,7 +404,7 @@ FileOpenResult fileOpenWrite(IOYengine* engine, const std::string& path){
 	file = open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_NONBLOCK | O_CLOEXEC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
 	if(file < 0) retSysError<FileOpenResult>("Open file failed", errno);
 	#endif
-	return engine->taek(HandledResource(new HandledLocalFile(file)));
+	return engine->taek(HandledResource(new StandardHandledResource(file)));
 }
 
 }
