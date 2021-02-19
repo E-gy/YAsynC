@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include "captrace.hpp"
 #include <ostream>
 
 namespace yasync {
@@ -20,6 +21,7 @@ class IFuture {
 		 * @returns current state of the future
 		 */
 		virtual FutureState state() = 0;
+		TraceCapture trace;
 };
 
 // template<typename T> using movonly = std::unique_ptr<T>;
