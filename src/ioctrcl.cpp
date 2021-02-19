@@ -31,9 +31,9 @@ BOOL WINAPI ctrlcHandler(DWORD sig){
 result<Future<void>, std::string> onCtrlC(Yengine* engine){
 	stahp = false;
 	#ifdef _WIN32
-	if(ctrlcEvent != INVALID_HANDLE_VALUE) return RErr<Future<void>, std::string>("ctrl+c handler already set!");
+	if(ctrlcEvent != INVALID_HANDLE_VALUE) return result<Future<void>, std::string>::Err("ctrl+c handler already set!");
 	ctrlcEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-	if(!SetConsoleCtrlHandler(ctrlcHandler, true)) return retSysError<Future<void>>("Set ctrl+c handler failed");
+	if(!SetConsoleCtrlHandler(ctrlcHandler, true)) return retSysError<result<Future<void>, std::string>>("Set ctrl+c handler failed");
 	#else
 	sigset_t sigs;
 	sigemptyset(&sigs);
@@ -55,7 +55,7 @@ result<Future<void>, std::string> onCtrlC(Yengine* engine){
 		stahp = false;
 	});
 	sigh.detach();
-	return ROk<Future<void>, std::string>(n);
+	return result<Future<void>, std::string>::Ok(n);
 }
 void unCtrlC(){
 	#ifdef _WIN32

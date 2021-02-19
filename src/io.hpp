@@ -84,8 +84,8 @@ template<typename T> auto mapVecToT(){
 
 std::string printSysError(const std::string& message, syserr_t e);
 std::string printSysError(const std::string& message);
-template<typename S> result<S, std::string> retSysError(const std::string& message, syserr_t e){ return RErr<S, std::string>(printSysError(message, e)); }
-template<typename S> result<S, std::string> retSysError(const std::string& message){ return RErr<S, std::string>(printSysError(message)); }
+template<typename R> R retSysError(const std::string& message, syserr_t e){ return R::Err(printSysError(message, e)); }
+template<typename R> R retSysError(const std::string& message){ return R::Err(printSysError(message)); }
 
 class IAIOResource : public IResource {
 	protected:
@@ -215,14 +215,14 @@ template<typename PatIt> Future<IAIOResource::ReadResult> IAIOResource::read_(co
 		if(pat == patEnd) return read<std::vector<char>>(j);
 	}
 	return defer(lambdagen([this, self = slf.lock(), pattern = std::vector<char>(patBegin, patEnd)]([[maybe_unused]] const Yengine* engine, bool& done, std::optional<Future<IAIOResource::ReadResult>>& awao) -> std::variant<AFuture, movonly<IAIOResource::ReadResult>> {
-		if(done) return IAIOResource::ReadResult("Result already submitted!");
+		if(done) return IAIOResource::ReadResult::Err("Result already submitted!");
 		if(awao){
 			auto gmd = *awao;
 			if(gmd->state() == FutureState::Completed){
 				auto res = gmd->result();
 				if(auto err = res->err()){
 					done = true;
-					return IAIOResource::ReadResult(*err);
+					return IAIOResource::ReadResult::Err(*err);
 				}
 				auto rd = *res->ok();
 				MoveAppend(rd, readbuff);
@@ -270,8 +270,6 @@ class IOYengine {
 		 * @returns async resource
 		 */
 		IOResource taek(HandledResource r);
-		result<IOResource, std::string> fileOpenRead(const std::string& path);
-		result<IOResource, std::string> fileOpenWrite(const std::string& path);
 	private:
 		friend class IResource;
 		void iothreadwork();
@@ -281,5 +279,9 @@ class IOYengine {
 		fd_t cfdStopSend, cfdStopReceive;
 		#endif
 };
+
+using FileOpenResult = result<IOResource, std::string>;
+FileOpenResult fileOpenRead(Yengine*, const std::string& path);
+FileOpenResult fileOpenWrite(Yengine*, const std::string& path);
 
 }

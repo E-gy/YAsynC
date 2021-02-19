@@ -110,7 +110,8 @@ class FileResource : public IAIOResource {
 	#ifdef _WIN32
 	#else
 	bool reged = false;
-	result<bool, std::string> lazyEpollReg(bool wr){
+	using EPollRegResult = result<bool, std::string>;
+	EPollRegResult lazyEpollReg(bool wr){
 		if(reged) return false;
 		::epoll_event epm;
 		epm.events = (wr ? EPOLLOUT : EPOLLIN) | EPOLLONESHOT;
@@ -122,16 +123,17 @@ class FileResource : public IAIOResource {
 				engif->r = wr ? EPOLLOUT : EPOLLIN;
 				engif->s = FutureState::Completed;
 				return !(reged = true);
-			} else return retSysError<bool>("Register to epoll failed");
+			} else return retSysError<EPollRegResult>("Register to epoll failed");
 		}
 		return reged = true;
 	}
-	result<void, std::string> epollRearm(bool wr){
-		if(!reged) return ROk<std::string>();
+	using EPollRearmResult = result<void, std::string>;
+	EPollRearmResult epollRearm(bool wr){
+		if(!reged) return EPollRearmResult::Ok();
 		::epoll_event epm;
 		epm.events = (wr ? EPOLLOUT : EPOLLIN) | EPOLLONESHOT;
 		epm.data.ptr = this;
-		return ::epoll_ctl(engine->ioEpoll, EPOLL_CTL_MOD, res->rh, &epm) ? retSysError<void>("Register to epoll failed") : ROk<std::string>();
+		return ::epoll_ctl(engine->ioEpoll, EPOLL_CTL_MOD, res->rh, &epm) ? retSysError<EPollRearmResult>("Register to epoll failed") : EPollRearmResult::Ok();
 	}
 	#endif
 	public:
@@ -149,21 +151,21 @@ class FileResource : public IAIOResource {
 			engif->s = FutureState::Running;
 			//self.get() == this   exists to memory-lock dangling IO resource to this lambda generator
 			return defer(lambdagen([this, self = slf.lock(), bytes]([[maybe_unused]] const Yengine* engine, bool& done, std::vector<char>& data) -> std::variant<AFuture, movonly<ReadResult>> {
-				if(done) return ROk<std::vector<char>, std::string>(data);
+				if(done) return ReadResult::Ok(data);
 				#ifdef _WIN32 //TODO FIXME a UB lives somewhere in here, appearing only on large data reads
 				if(engif->s == FutureState::Completed){
 					IOCompletionInfo result = *engif->r;
 					if(!result.status){
 						if(result.lerr == ERROR_HANDLE_EOF){
 							done = true;
-							return ROk<std::vector<char>, std::string>(data);
-						} else return retSysError<std::vector<char>>("Async Read failure", result.lerr);
+							return ReadResult::Ok(data);
+						} else return retSysError<ReadResult>("Async Read failure", result.lerr);
 					} else {
 						data.insert(data.end(), buffer.begin(), buffer.begin()+result.transferred);
 						overlapped()->Offset += result.transferred;
 						if(bytes > 0 && (done = data.size() >= bytes)){
 							done = true;
-							return ROk<std::vector<char>, std::string>(data);;
+							return ReadResult::Ok(data);;
 						}
 					}
 				}
@@ -173,40 +175,40 @@ class FileResource : public IAIOResource {
 					overlapped()->Offset += transferred;
 					if(bytes > 0 && data.size() >= bytes){
 						done = true;
-						return ROk<std::vector<char>, std::string>(data);;
+						return ReadResult::Ok(data);;
 					}
 				}
 				switch(::GetLastError()){
 					case ERROR_IO_PENDING: break;
 					case ERROR_HANDLE_EOF:
 						done = true;
-						return ROk<std::vector<char>, std::string>(data);;
-					default: return retSysError<std::vector<char>>("Sync Read failure");
+						return ReadResult::Ok(data);;
+					default: return retSysError<ReadResult>("Sync Read failure");
 				}
 				#else
 				{
 					auto rr = lazyEpollReg(false);
-					if(auto err = rr.error()) return RError<std::vector<char>>(*err);
+					if(auto err = rr.error()) return ReadResult::Err(*err);
 					else if(*rr.ok()) return engif;
 				}
 				if(engif->s == FutureState::Completed){
 					int leve = *engif->r;
-					if(leve != EPOLLIN) return retSysError<std::vector<char>>("Epoll wrong event");
+					if(leve != EPOLLIN) return retSysError<ReadResult>("Epoll wrong event");
 					int transferred;
 					while((transferred = ::read(res->rh, buffer.data(), buffer.size())) > 0){
 						data.insert(data.end(), buffer.begin(), buffer.begin()+transferred);
 						if(bytes > 0 && data.size() >= bytes){
 							done = true;
-							return ROk<std::vector<char>, std::string>(data);;
+							return ReadResult::Ok(data);;
 						}
 					}
 					if(transferred == 0){
 						done = true;
-						return ROk<std::vector<char>, std::string>(data);;
+						return ReadResult::Ok(data);;
 					}
-					if(errno != EWOULDBLOCK && errno != EAGAIN) return retSysError<std::vector<char>>("Read failed");
+					if(errno != EWOULDBLOCK && errno != EAGAIN) return retSysError<ReadResult>("Read failed");
 				}
-				if(auto e = epollRearm(true).error()) return RError<std::vector<char>>(*e);
+				if(auto e = epollRearm(true).error()) return ReadResult::(*e);
 				#endif
 				engif->s = FutureState::Running;
 				return engif;
@@ -216,17 +218,17 @@ class FileResource : public IAIOResource {
 			engif->s = FutureState::Running;
 			return defer(lambdagen([this, self = slf.lock()]([[maybe_unused]] const Yengine* engine, bool& done, std::vector<char>& data) -> std::variant<AFuture, movonly<WriteResult>> {
 				if(data.empty()) done = true;
-				if(done) return ROk<std::string>();
+				if(done) return WriteResult::Ok();
 				#ifdef _WIN32
 				if(engif->s == FutureState::Completed){
 					IOCompletionInfo result = *engif->r;
-					if(!result.status) return retSysError<void>("Async Write failed", result.lerr);
+					if(!result.status) return retSysError<WriteResult>("Async Write failed", result.lerr);
 					else {
 						data.erase(data.begin(), data.begin()+result.transferred);
 						overlapped()->Offset += result.transferred;
 						if(data.empty()){
 							done = true;
-							return ROk<std::string>();
+							return WriteResult::Ok();
 						}
 					}
 				}
@@ -236,30 +238,30 @@ class FileResource : public IAIOResource {
 					overlapped()->Offset += transferred;
 					if(data.empty()){
 						done = true;
-						return ROk<std::string>();
+						return WriteResult::Ok();
 					}
 				}
-				if(::GetLastError() != ERROR_IO_PENDING) return retSysError<void>("Sync Write failed");
+				if(::GetLastError() != ERROR_IO_PENDING) return retSysError<WriteResult>("Sync Write failed");
 				#else
 				{
 					auto rr = lazyEpollReg(true);
-					if(auto err = rr.error()) return RError<void>(*err);
+					if(auto err = rr.error()) return WriteResult::Err(*err);
 					else if(*rr.ok()) return engif;
 				}
 				if(engif->s == FutureState::Completed){
 					int leve = *engif->r;
-					if(leve != EPOLLOUT) return retSysError<void>("Epoll wrong event");
+					if(leve != EPOLLOUT) return retSysError<WriteResult>("Epoll wrong event");
 					int transferred;
 					while((transferred = ::write(res->rh, data.data(), data.size())) >= 0){
 						data.erase(data.begin(), data.begin()+transferred);
 						if(data.empty()){
 							done = true;
-							return ROk<std::string>();
+							return WriteResult::Ok();
 						}
 					}
-					if(errno != EWOULDBLOCK && errno != EAGAIN) return retSysError<void>("Write failed");
+					if(errno != EWOULDBLOCK && errno != EAGAIN) return retSysError<WriteResult>("Write failed");
 				}
-				if(auto e = epollRearm(true).error()) return RError<void>(*e);
+				if(auto e = epollRearm(true).error()) return WriteResult::Err(*e);
 				#endif
 				engif->s = FutureState::Running;
 				return engif;
@@ -368,27 +370,27 @@ class HandledLocalFile : public IHandledResource {
 		}
 };
 
-result<IOResource, std::string> IOYengine::fileOpenRead(const std::string& path){
+FileOpenResult fileOpenRead(IOYengine* engine, const std::string& path){
 	ResourceHandle file;
 	#ifdef _WIN32
 	file = CreateFileA(path.c_str(), GENERIC_READ, 0, NULL, OPEN_ALWAYS, FILE_FLAG_OVERLAPPED/* | FILE_FLAG_NO_BUFFERING cf https://docs.microsoft.com/en-us/windows/win32/fileio/file-buffering?redirectedfrom=MSDN */, NULL);
-	if(file == INVALID_HANDLE_VALUE) retSysError<IOResource>("Open File failed", GetLastError());
+	if(file == INVALID_HANDLE_VALUE) retSysError<FileOpenResult>("Open File failed", GetLastError());
 	#else
 	file = open(path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-	if(file < 0) retSysError<IOResource>("Open file failed", errno);
+	if(file < 0) retSysError<FileOpenResult>("Open file failed", errno);
 	#endif
-	return taek(HandledResource(new HandledLocalFile(file)));
+	return engine->taek(HandledResource(new HandledLocalFile(file)));
 }
-result<IOResource, std::string> IOYengine::fileOpenWrite(const std::string& path){
+FileOpenResult fileOpenWrite(IOYengine* engine, const std::string& path){
 	ResourceHandle file;
 	#ifdef _WIN32
 	file = CreateFileA(path.c_str(), GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_FLAG_OVERLAPPED, NULL);
-	if(file == INVALID_HANDLE_VALUE) retSysError<IOResource>("Open File failed", GetLastError());
+	if(file == INVALID_HANDLE_VALUE) retSysError<FileOpenResult>("Open File failed", GetLastError());
 	#else
 	file = open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_NONBLOCK | O_CLOEXEC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
-	if(file < 0) retSysError<IOResource>("Open file failed", errno);
+	if(file < 0) retSysError<FileOpenResult>("Open file failed", errno);
 	#endif
-	return taek(HandledResource(new HandledLocalFile(file)));
+	return engine->taek(HandledResource(new HandledLocalFile(file)));
 }
 
 }
