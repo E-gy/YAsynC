@@ -151,7 +151,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 			if(::listen(sock, 200) < 0) return retSysNetError<ListenResult>("listen failed");
 			{
 				::epoll_event epm;
-				epm.events = EPOLLIN;
+				epm.events = EPOLLIN|EPOLLONESHOT;
 				epm.data.ptr = this;
 				if(::epoll_ctl(engine->ioEpoll, EPOLL_CTL_ADD, sock, &epm) < 0) return retSysError<ListenResult>("epoll add failed");
 			}
@@ -227,6 +227,12 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 					}
 				}
 				#else
+				{
+					::epoll_event epm;
+					epm.events = EPOLLIN|EPOLLONESHOT;
+					epm.data.ptr = this;
+					if(::epoll_ctl(engine->ioEpoll, EPOLL_CTL_MOD, sock, &epm) < 0) if(erracc(self, errno, "EPoll rearm failed")) return stahp();
+				}
 				#endif
 				return engif;
 			}, 0));
