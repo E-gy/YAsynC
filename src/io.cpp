@@ -194,8 +194,7 @@ class FileResource : public IAIOResource {
 							break;
 						}
 						case EPOLLPRI:
-						case EPOLLOUT:
-							break;
+						case EPOLLOUT: //NO! BAD EPOLL!
 						default: {
 							done = true;
 							std::ostringstream erm;
@@ -204,7 +203,7 @@ class FileResource : public IAIOResource {
 						}
 					}
 				}
-				if(auto e = epollRearm(true).err()) return ReadResult::Err(*e);
+				if(auto e = epollRearm(false).err()) return ReadResult::Err(*e);
 				#endif
 				return engif;
 			}, std::vector<char>()));
@@ -266,10 +265,10 @@ class FileResource : public IAIOResource {
 								done = true;
 								return retSysError<WriteResult>("Write failed");
 							}
+							break;
 						}
 						case EPOLLPRI:
-						case EPOLLIN:
-							break;
+						case EPOLLIN: //NO! BAD EPOLL!
 						default: {
 							done = true;
 							std::ostringstream erm;
