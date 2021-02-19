@@ -32,8 +32,8 @@ class SystemNetworkingStateControl {
 		SystemNetworkingStateControl(SystemNetworkingStateControl&&) = delete;
 };
 
-template<int SDomain, int SType, int SProto, typename AddressInfo, typename Acc> class AListeningSocket;
-template<int SDomain, int SType, int SProto, typename AddressInfo, typename Acc> using ListeningSocket = std::shared_ptr<AListeningSocket<SDomain, SType, SProto, AddressInfo, Acc>>;
+template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs, typename Acc> class AListeningSocket;
+template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs, typename Acc> using ListeningSocket = std::shared_ptr<AListeningSocket<SDomain, SType, SProto, AddressInfo, Errs, Acc>>;
 
 class AHandledStrayIOSocket : public IHandledResource {
 	public:
@@ -52,9 +52,10 @@ class AHandledStrayIOSocket : public IHandledResource {
 using HandledStrayIOSocket = std::unique_ptr<AHandledStrayIOSocket>;
 
 /**
- * @typeparam Acc (AddressInfo, IOResource) -> result<void, std::string>
+ * @typeparam Errs (this, sysneterr_t, string) -> bool
+ * @typeparam Acc (AddressInfo, IOResource) -> void
  */
-template<int SDomain, int SType, int SProto, typename AddressInfo, typename Acc> class AListeningSocket : public IResource {		
+template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs, typename Acc> class AListeningSocket : public IResource {		
 	protected:
 		SocketHandle sock;
 		std::weak_ptr<AListeningSocket> slf;
@@ -107,11 +108,12 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Acc>
 		};
 		InterlocInf linterloc = {};
 		#endif
+		Errs erracc;
 		Acc acceptor;
 	public:
 		IOYengine* const engine;
 		const AddressInfo address;
-		AListeningSocket(IOYengine* e, SocketHandle socket, AddressInfo addr, Acc accept) : sock(socket), engif(new OutsideFuture<ListenEvent>()), acceptor(accept), engine(e), address(addr) {
+		AListeningSocket(IOYengine* e, SocketHandle socket, AddressInfo addr, Errs era, Acc accept) : sock(socket), engif(new OutsideFuture<ListenEvent>()), erracc(era), acceptor(accept), engine(e), address(addr) {
 			#ifdef _WIN32
 			CreateIoCompletionPort(reinterpret_cast<HANDLE>(sock), engine->ioCompletionPort, COMPLETION_KEY_IO, 0);
 			#else
@@ -122,39 +124,42 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Acc>
 		~AListeningSocket(){
 			close();
 		}
-		using ListenResult = result<void, std::string>;
+		using ListenResult = result<Future<void>, std::string>;
 		/**
 		 * Starts listening
 		 * @returns future that will complete when the socket shutdowns, or errors.
 		 */
-		Future<ListenResult> listen(){
+		ListenResult listen(){
 			#ifdef _WIN32 //https://stackoverflow.com/a/50227324
-			if(::bind(sock, reinterpret_cast<const sockaddr*>(&address), sizeof(AddressInfo)) == SOCKET_ERROR) return completed<ListenResult>(retSysNetError<ListenResult>("WSA bind failed"));
-			if(::listen(sock, SOMAXCONN) == SOCKET_ERROR) return completed<ListenResult>(retSysNetError<ListenResult>("WSA listen failed"));
+			if(::bind(sock, reinterpret_cast<const sockaddr*>(&address), sizeof(AddressInfo)) == SOCKET_ERROR) return retSysNetError<ListenResult>("WSA bind failed");
+			if(::listen(sock, SOMAXCONN) == SOCKET_ERROR) return retSysNetError<ListenResult>("WSA listen failed");
 			#else
 			#endif
-			return defer(lambdagen([this, self = slf.lock()]([[maybe_unused]] const Yengine* _engine, bool& done, [[maybe_unused]] int _un) -> std::variant<AFuture, movonly<ListenResult>>{
-				if(done) return ListenResult::Ok();
+			return defer(lambdagen([this, self = slf.lock()]([[maybe_unused]] const Yengine* _engine, bool& done, [[maybe_unused]] int _un) -> std::variant<AFuture, movonly<void>>{
+				if(done) return movonly<void>();
+				auto stahp = [&](){
+					done = true;
+					close();
+					return movonly<void>();
+				};
 				if(engif->s == FutureState::Completed){
 					auto event = engif->result();
 					engif->s = FutureState::Running;
 					switch(event->type){
 						case ListenEventType::Accept:{
 							#ifdef _WIN32
-							if(::setsockopt(lconn->sock(), SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, reinterpret_cast<char*>(&sock), sizeof(sock)) == SOCKET_ERROR) return retSysNetError<ListenResult>("Set accepting socket accept failed");
-							auto takire = acceptor(linterloc.remote.addr, engine->taek(HandledResource(std::move(lconn))));
-							if(takire.isErr()) return takire;
+							if(::setsockopt(lconn->sock(), SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, reinterpret_cast<char*>(&sock), sizeof(sock)) == SOCKET_ERROR){
+								if(erracc(self, ::WSAGetLastError(), "Set accepting socket accept failed")) return stahp();
+							} else acceptor(linterloc.remote.addr, engine->taek(HandledResource(std::move(lconn))));
 							#else
 							#endif
 							break;
 						}
 						case ListenEventType::Error:
-							return retSysNetError<ListenResult>("Async accept error", event->err);
-						case ListenEventType::Close:
-							done = true;
-							close();
-							return ListenResult::Ok();
-						default: return ListenResult::Err("Received unknown event");
+							if(erracc(self, event->err, "Async accept error")) return stahp();
+							break;
+						case ListenEventType::Close: return stahp();
+						default: if(erracc(self, 0, "Received unknown event")) return stahp();
 					}
 				}
 				#ifdef _WIN32
@@ -162,14 +167,14 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Acc>
 				while(!goAsync){
 					{
 						auto nconn = ::WSASocket(SDomain, SType, SProto, NULL, 0, WSA_FLAG_OVERLAPPED);
-						if(nconn == INVALID_SOCKET) return retSysNetError<ListenResult>("Create accepting socket failed");
+						if(nconn == INVALID_SOCKET) if(erracc(self, ::WSAGetLastError(), "Create accepting socket failed") || true) return stahp();
 						lconn.reset(new AHandledStrayIOSocket(nconn));
 					}
 					DWORD reclen;
 					if(::AcceptEx(sock, lconn->sock(), &linterloc, 0, sizeof(linterloc.local), sizeof(linterloc.remote), &reclen, overlapped())){
-						if(::setsockopt(lconn->sock(), SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, reinterpret_cast<char*>(&sock), sizeof(sock)) == SOCKET_ERROR) return retSysNetError<ListenResult>("Set accepting socket accept failed");
-						auto takire = acceptor(linterloc.remote.addr, engine->taek(HandledResource(std::move(lconn))));
-						if(takire.isErr()) return takire;
+						if(::setsockopt(lconn->sock(), SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, reinterpret_cast<char*>(&sock), sizeof(sock)) == SOCKET_ERROR){
+							if(erracc(self, ::WSAGetLastError(), "Set accepting socket accept failed")) return stahp();
+						} else acceptor(linterloc.remote.addr, engine->taek(HandledResource(std::move(lconn))));
 					}
 					else switch(::WSAGetLastError()){
 						case WSAEWOULDBLOCK:
@@ -177,7 +182,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Acc>
 							goAsync = true;
 							break;
 						case WSAECONNRESET: break;
-						default: return retSysNetError<ListenResult>("Accept failed");
+						default: if(erracc(self, ::WSAGetLastError(), "Accept failed")) return stahp();
 					}
 				}
 				#else
@@ -194,15 +199,16 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Acc>
 		}
 };
 
-template<int SDomain, int SType, int SProto, typename AddressInfo, typename Acc> result<ListeningSocket<SDomain, SType, SProto, AddressInfo, Acc>, std::string> netListen(IOYengine* engine, AddressInfo address, Acc acceptor){
+template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs, typename Acc> result<ListeningSocket<SDomain, SType, SProto, AddressInfo, Errs, Acc>, std::string> netListen(IOYengine* engine, AddressInfo address, Errs erracc, Acc acceptor){
+	using LSock = ListeningSocket<SDomain, SType, SProto, AddressInfo, Errs, Acc>;
 	SocketHandle sock;
 	#ifdef _WIN32
 	sock = ::WSASocket(SDomain, SType, SProto, NULL, 0, WSA_FLAG_OVERLAPPED);
-	if(sock == INVALID_SOCKET) return retSysError<result<ListeningSocket<SDomain, SType, SProto, AddressInfo, Acc>, std::string>>("WSA socket construction failed");
+	if(sock == INVALID_SOCKET) return retSysError<result<LSock, std::string>>("WSA socket construction failed");
 	#else
 	//TODO
 	#endif
-	return result<ListeningSocket<SDomain, SType, SProto, AddressInfo, Acc>, std::string>::Ok(ListeningSocket<SDomain, SType, SProto, AddressInfo, Acc>(new AListeningSocket<SDomain, SType, SProto, AddressInfo, Acc>(engine, sock, address, acceptor)));
+	return result<LSock, std::string>::Ok(LSock(new AListeningSocket<SDomain, SType, SProto, AddressInfo, Errs, Acc>(engine, sock, address, erracc, acceptor)));
 }
 
 
