@@ -1,6 +1,7 @@
 #include "syserr.hpp"
 
 #include <sstream>
+#include <cstring>
 
 std::string printSysError(const std::string& message, syserr_t e){
 	std::ostringstream compose;
