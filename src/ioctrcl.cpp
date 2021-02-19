@@ -77,4 +77,22 @@ void unCtrlC(){
 	#endif
 }
 
+result<void, std::string> mainThreadWaitCtrlC(){
+	#ifdef _WIN32
+	if(ctrlcEvent != INVALID_HANDLE_VALUE) return result<void, std::string>::Err("ctrl+c handler already set!");
+	ctrlcEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+	if(!SetConsoleCtrlHandler(ctrlcHandler, true)) return retSysError<result<void, std::string>>("Set ctrl+c handler failed");
+	WaitForSingleObject(ctrlcEvent, INFINITE);
+	CloseHandle(ctrlcEvent);
+	ctrlcEvent = INVALID_HANDLE_VALUE;
+	#else
+	sigset_t sigs;
+	sigemptyset(&sigs);
+	sigaddset(&sigs, SIGINT);
+	int sig = 0;
+	sigwait(&sigs, &sig);
+	#endif
+	return result<void, std::string>::Ok();
+}
+
 }
