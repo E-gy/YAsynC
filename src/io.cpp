@@ -200,25 +200,35 @@ class FileResource : public IAIOResource {
 				if(engif->s == FutureState::Completed){
 					engif->s = FutureState::Running;
 					int leve = *engif->r;
-					if(leve != EPOLLIN){
-						done = true;
-						return retSysError<ReadResult>("Epoll wrong event");
-					}
-					int transferred;
-					while((transferred = ::read(res->rh, buffer.data(), buffer.size())) > 0){
-						data.insert(data.end(), buffer.begin(), buffer.begin()+transferred);
-						if(bytes > 0 && data.size() >= bytes){
-							done = true;
-							return ReadResult::Ok(data);;
+					switch(leve){
+						case EPOLLIN: {
+							int transferred;
+							while((transferred = ::read(res->rh, buffer.data(), buffer.size())) > 0){
+								data.insert(data.end(), buffer.begin(), buffer.begin()+transferred);
+								if(bytes > 0 && data.size() >= bytes){
+									done = true;
+									return ReadResult::Ok(data);;
+								}
+							}
+							if(transferred == 0){
+								done = true;
+								return ReadResult::Ok(data);;
+							}
+							if(errno != EWOULDBLOCK && errno != EAGAIN){
+								done = true;
+								return retSysError<ReadResult>("Read failed");
+							}
+							break;
 						}
-					}
-					if(transferred == 0){
-						done = true;
-						return ReadResult::Ok(data);;
-					}
-					if(errno != EWOULDBLOCK && errno != EAGAIN){
-						done = true;
-						return retSysError<ReadResult>("Read failed");
+						case EPOLLPRI:
+						case EPOLLOUT:
+							break;
+						default: {
+							done = true;
+							std::ostringstream erm;
+							erm << "Epoll wrong event (" << leve << ")\n";
+							return retSysError<ReadResult>(erm.str());
+						}
 					}
 				}
 				if(auto e = epollRearm(true).err()) return ReadResult::Err(*e);
@@ -269,21 +279,30 @@ class FileResource : public IAIOResource {
 				if(engif->s == FutureState::Completed){
 					engif->s = FutureState::Running;
 					int leve = *engif->r;
-					if(leve != EPOLLOUT){
-						done = true;
-						return retSysError<WriteResult>("Epoll wrong event");
-					}
-					int transferred;
-					while((transferred = ::write(res->rh, data.data(), data.size())) >= 0){
-						data.erase(data.begin(), data.begin()+transferred);
-						if(data.empty()){
-							done = true;
-							return WriteResult::Ok();
+					switch(leve){
+						case EPOLLOUT: {
+							int transferred;
+							while((transferred = ::write(res->rh, data.data(), data.size())) >= 0){
+								data.erase(data.begin(), data.begin()+transferred);
+								if(data.empty()){
+									done = true;
+									return WriteResult::Ok();
+								}
+							}
+							if(errno != EWOULDBLOCK && errno != EAGAIN){
+								done = true;
+								return retSysError<WriteResult>("Write failed");
+							}
 						}
-					}
-					if(errno != EWOULDBLOCK && errno != EAGAIN){
-						done = true;
-						return retSysError<WriteResult>("Write failed");
+						case EPOLLPRI:
+						case EPOLLIN:
+							break;
+						default: {
+							done = true;
+							std::ostringstream erm;
+							erm << "Epoll wrong event (" << leve << ")\n";
+							return retSysError<WriteResult>(erm.str());
+						}
 					}
 				}
 				if(auto e = epollRearm(true).err()) return WriteResult::Err(*e);
