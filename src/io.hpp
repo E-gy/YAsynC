@@ -38,6 +38,7 @@ class IHandledResource {
 		virtual ~IHandledResource() = 0;
 };
 using HandledResource = std::unique_ptr<IHandledResource>;
+using SharedResource = std::shared_ptr<IHandledResource>;
 
 #ifdef _WIN32
 struct IOCompletionInfo {
@@ -253,11 +254,7 @@ class IOYengine {
 		~IOYengine();
 		// result<void, int> iocplReg(ResourceHandle r, bool rearm); as much as we'd love to do that, there simply waay to many differences between IOCompletion and EPoll
 		//so let's make platform specific internals public instead ¯\_(ツ)_/¯
-		#ifdef _WIN32
-		HANDLE const ioCompletionPort;
-		#else
-		fd_t const ioEpoll;
-		#endif
+		SharedResource const ioPo;
 		/**
 		 * Opens asynchronous IO on the handled resource.
 		 * @param r @consumes
@@ -266,7 +263,7 @@ class IOYengine {
 		IOResource taek(HandledResource r);
 	private:
 		friend class IResource;
-		void iothreadwork();
+		void iothreadwork(SharedResource ioPo);
 		#ifdef _WIN32
 		static constexpr unsigned ioThreads = 1; //IO events are dispatched by notification to the engine
 		#else

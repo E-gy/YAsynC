@@ -33,15 +33,15 @@ class StandardHandledResource : public IHandledResource {
 
 IOYengine::IOYengine(Yengine* e) : engine(e),
 	#ifdef _WIN32
-	ioCompletionPort(CreateIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, ioThreads))
+	ioPo(new StandardHandledResource(CreateIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, ioThreads)))
 	#else
-	ioEpoll(::epoll_create1(EPOLL_CLOEXEC))
+	ioPo(new StandardHandledResource(::epoll_create1(EPOLL_CLOEXEC)))
 	#endif
 {
 	#ifdef _WIN32
-	for(unsigned i = 0; i < ioThreads; i++) Daemons::launch([this](){ this->iothreadwork(); });
+	for(unsigned i = 0; i < ioThreads; i++) Daemons::launch([this](){ iothreadwork(ioPo); });
 	#else
-	if(ioEpoll < 0) throw std::runtime_error("Initalizing EPoll failed");
+	if(ioPo->rh < 0) throw std::runtime_error("Initalizing EPoll failed");
 	fd_t pipe2[2];
 	if(::pipe2(pipe2, O_CLOEXEC | O_NONBLOCK)) throw std::runtime_error("Initalizing close down pipe failed");
 	cfdStopSend = pipe2[0];
@@ -49,26 +49,25 @@ IOYengine::IOYengine(Yengine* e) : engine(e),
 	::epoll_event epm;
 	epm.events = EPOLLHUP | EPOLLERR | EPOLLONESHOT;
 	epm.data.ptr = this;
-	if(::epoll_ctl(ioEpoll, EPOLL_CTL_ADD, cfdStopReceive, &epm)) throw std::runtime_error("Initalizing close down pipe epoll failed");
-	Daemons::launch([this](){ this->iothreadwork(); });
+	if(::epoll_ctl(ioPo->rh, EPOLL_CTL_ADD, cfdStopReceive, &epm)) throw std::runtime_error("Initalizing close down pipe epoll failed");
+	Daemons::launch([this](){ iothreadwork(ioPo); });
 	#endif
 }
 
 IOYengine::~IOYengine(){
 	#ifdef _WIN32
-	for(unsigned i = 0; i < ioThreads; i++) PostQueuedCompletionStatus(ioCompletionPort, 0, COMPLETION_KEY_SHUTDOWN, NULL);
-	CloseHandle(ioCompletionPort);
+	for(unsigned i = 0; i < ioThreads; i++) PostQueuedCompletionStatus(ioPo->rh, 0, COMPLETION_KEY_SHUTDOWN, NULL);
 	#else
 	close(cfdStopSend); //sends EPOLLHUP to receiving end
 	close(cfdStopReceive);
 	//hmmm...
-	close(ioEpoll);
+	close(ioPo->rh);
 	#endif
 }
 
 /*result<void, int> IOYengine::iocplReg(ResourceHandle r, bool rearm){
 	#ifdef _WIN32
-	return !rearm && CreateIoCompletionPort(r, ioCompletionPort, COMPLETION_KEY_IO, 0) ? result<void, int>(GetLastError()) : result<void, int>();
+	return !rearm && CreateIoCompletionPort(r, ioPo->rh, COMPLETION_KEY_IO, 0) ? result<void, int>(GetLastError()) : result<void, int>();
 	#else
 	::epoll_event epm;
 	epm.events = EPOLLOUT | EPOLLIN EPOLLONESHOT;
@@ -97,7 +96,7 @@ class FileResource : public IAIOResource {
 		::epoll_event epm;
 		epm.events = (wr ? EPOLLOUT : EPOLLIN) | EPOLLONESHOT;
 		epm.data.ptr = this;
-		if(::epoll_ctl(engine->ioEpoll, EPOLL_CTL_ADD, res->rh, &epm)){
+		if(::epoll_ctl(engine->ioPo->rh, EPOLL_CTL_ADD, res->rh, &epm)){
 			if(errno == EPERM){
 				//The file does not support non-blocking io :(
 				//That means that all r/w will succeed (and block). So we report ourselves ready for IO, and off to EOD we go!
@@ -114,14 +113,14 @@ class FileResource : public IAIOResource {
 		::epoll_event epm;
 		epm.events = (wr ? EPOLLOUT : EPOLLIN) | EPOLLONESHOT;
 		epm.data.ptr = this;
-		return ::epoll_ctl(engine->ioEpoll, EPOLL_CTL_MOD, res->rh, &epm) ? retSysError<EPollRearmResult>("Register to epoll failed") : EPollRearmResult::Ok();
+		return ::epoll_ctl(engine->ioPo->rh, EPOLL_CTL_MOD, res->rh, &epm) ? retSysError<EPollRearmResult>("Register to epoll failed") : EPollRearmResult::Ok();
 	}
 	#endif
 	public:
 		friend class IOYengine;
 		FileResource(IOYengine* e, HandledResource hr) : IAIOResource(e), res(std::move(hr)), buffer(), engif(new OutsideFuture<IOCompletionInfo>()) {
 			#ifdef _WIN32
-			CreateIoCompletionPort(res->rh, e->ioCompletionPort, COMPLETION_KEY_IO, 0);
+			CreateIoCompletionPort(res->rh, e->ioPo->rh, COMPLETION_KEY_IO, 0);
 			#else
 			#endif
 		}
@@ -355,19 +354,19 @@ IORWriter IAIOResource::writer(){
 }
 
 
-void IOYengine::iothreadwork(){
+void IOYengine::iothreadwork(SharedResource ioPo){
 	while(true){
 		#ifdef _WIN32
 		IOCompletionInfo inf;
 		ULONG_PTR key;
 		LPOVERLAPPED overl;
-		inf.status = GetQueuedCompletionStatus(ioCompletionPort, &inf.transferred, &key, &overl, INFINITE);
+		inf.status = GetQueuedCompletionStatus(ioPo->rh, &inf.transferred, &key, &overl, INFINITE);
 		inf.lerr = GetLastError();
 		if(key == COMPLETION_KEY_SHUTDOWN) break;
 		if(key == COMPLETION_KEY_IO) reinterpret_cast<IResource::Overlapped*>(overl)->resource->notify(inf);
 		#else
 		::epoll_event event;
-		auto es = ::epoll_wait(ioEpoll, &event, 1, -1);
+		auto es = ::epoll_wait(ioPo->rh, &event, 1, -1);
 		if(es < 0) switch(errno){
 			case EINTR: break;
 			default: throw std::runtime_error(printSysError("Epoll wait failed"));

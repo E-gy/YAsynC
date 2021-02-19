@@ -128,7 +128,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 		const AddressInfo address;
 		AListeningSocket(IOYengine* e, SocketHandle socket, AddressInfo addr, Errs era, Acc accept) : sock(socket), engif(new OutsideFuture<ListenEvent>()), erracc(era), acceptor(accept), engine(e), address(addr) {
 			#ifdef _WIN32
-			CreateIoCompletionPort(reinterpret_cast<HANDLE>(sock), engine->ioCompletionPort, COMPLETION_KEY_IO, 0);
+			CreateIoCompletionPort(reinterpret_cast<HANDLE>(sock), engine->ioPo->rh, COMPLETION_KEY_IO, 0);
 			#else
 			#endif
 		}
@@ -153,7 +153,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 				::epoll_event epm;
 				epm.events = EPOLLIN|EPOLLONESHOT;
 				epm.data.ptr = this;
-				if(::epoll_ctl(engine->ioEpoll, EPOLL_CTL_ADD, sock, &epm) < 0) return retSysError<ListenResult>("epoll add failed");
+				if(::epoll_ctl(engine->ioPo->rh, EPOLL_CTL_ADD, sock, &epm) < 0) return retSysError<ListenResult>("epoll add failed");
 			}
 			#endif
 			return defer(lambdagen([this, self = slf.lock()]([[maybe_unused]] const Yengine* _engine, bool& done, [[maybe_unused]] int _un) -> std::variant<AFuture, movonly<void>>{
@@ -231,7 +231,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 					::epoll_event epm;
 					epm.events = EPOLLIN|EPOLLONESHOT;
 					epm.data.ptr = this;
-					if(::epoll_ctl(engine->ioEpoll, EPOLL_CTL_MOD, sock, &epm) < 0) if(erracc(self, errno, "EPoll rearm failed")) return stahp();
+					if(::epoll_ctl(engine->ioPo->rh, EPOLL_CTL_MOD, sock, &epm) < 0) if(erracc(self, errno, "EPoll rearm failed")) return stahp();
 				}
 				#endif
 				return engif;
