@@ -3,7 +3,7 @@
 #include "agen.hpp"
 #include "future.hpp"
 
-#include <thread>
+#include "daemons.hpp"
 #include "engine.hpp"
 
 namespace yasync {
@@ -44,13 +44,12 @@ template<typename T> Future<T> completed(const T& t){
 
 template<typename T> Future<T> asyncSleep(Yengine* engine, unsigned ms, T ret){
 	std::shared_ptr<OutsideFuture<T>> f(new OutsideFuture<T>());
-	std::thread th([engine, ms](std::shared_ptr<OutsideFuture<T>> f, auto rt){
+	Daemons::launch([engine, ms](std::shared_ptr<OutsideFuture<T>> f, auto rt){
 		std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 		f->s = FutureState::Completed;
 		f->r = std::move(rt);
 		engine->notify(std::dynamic_pointer_cast<IFutureT<T>>(f));
 	}, f, movonly<T>(new T(ret)));
-	th.detach();
 	return f;
 }
 Future<void> asyncSleep(Yengine* engine, unsigned ms);

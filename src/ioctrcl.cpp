@@ -40,7 +40,7 @@ result<Future<void>, std::string> onCtrlC(Yengine* engine){
 	sigaddset(&sigs, SIGINT);
 	#endif
 	std::shared_ptr<OutsideFuture<void>> n(new OutsideFuture<void>());
-	std::thread sigh([=](){
+	Daemons::launch([=](){
 		while(true){
 			#ifdef _WIN32
 			WaitForSingleObject(ctrlcEvent, INFINITE);
@@ -54,7 +54,6 @@ result<Future<void>, std::string> onCtrlC(Yengine* engine){
 		}
 		stahp = false;
 	});
-	sigh.detach();
 	return result<Future<void>, std::string>::Ok(n);
 }
 void unCtrlC(){

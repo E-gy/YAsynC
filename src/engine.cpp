@@ -1,6 +1,6 @@
 #include "engine.hpp"
 
-#include <thread>
+#include "daemons.hpp"
 
 namespace yasync {
 
@@ -19,10 +19,7 @@ std::ostream& operator<<(std::ostream& os, const FutureState& state){
 Yengine::Yengine(unsigned threads) : workers(threads) {
 	work.cvIdle = &condWLE;
 	work.thresIdle = workers;
-	for(unsigned i = 0; i < workers; i++){
-		std::thread th([this](){ this->threadwork(); });
-		th.detach();
-	}
+	for(unsigned i = 0; i < workers; i++) Daemons::launch([this](){ this->threadwork(); });
 }
 
 void Yengine::wle(){

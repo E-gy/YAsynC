@@ -27,10 +27,7 @@ IOYengine::IOYengine(Yengine* e) : engine(e),
 	#endif
 {
 	#ifdef _WIN32
-	for(unsigned i = 0; i < ioThreads; i++){
-		std::thread th([this](){ this->iothreadwork(); });
-		th.detach();
-	}
+	for(unsigned i = 0; i < ioThreads; i++) Daemons::launch([this](){ this->iothreadwork(); });
 	#else
 	if(ioEpoll < 0) throw std::runtime_error("Initalizing EPoll failed");
 	fd_t pipe2[2];
@@ -41,8 +38,7 @@ IOYengine::IOYengine(Yengine* e) : engine(e),
 	epm.events = EPOLLHUP | EPOLLERR | EPOLLONESHOT;
 	epm.data.ptr = this;
 	if(::epoll_ctl(ioEpoll, EPOLL_CTL_ADD, cfdStopReceive, &epm)) throw std::runtime_error("Initalizing close down pipe epoll failed");
-	std::thread th([this](){ this->iothreadwork(); });
-	th.detach();
+	Daemons::launch([this](){ this->iothreadwork(); });
 	#endif
 }
 

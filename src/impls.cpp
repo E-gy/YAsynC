@@ -10,12 +10,11 @@ std::variant<AFuture, movonly<int>> RangeGenerator::resume([[maybe_unused]] cons
 
 Future<void> asyncSleep(Yengine* engine, unsigned ms){
 	std::shared_ptr<OutsideFuture<void>> f(new OutsideFuture<void>());
-	std::thread th([engine, ms](std::shared_ptr<OutsideFuture<void>> f){
+	Daemons::launch([engine, ms](std::shared_ptr<OutsideFuture<void>> f){
 		std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 		f->s = FutureState::Completed;
 		engine->notify(std::dynamic_pointer_cast<IFutureT<void>>(f));
 	}, f);
-	th.detach();
 	return f;
 }
 
