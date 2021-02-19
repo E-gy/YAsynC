@@ -1,12 +1,14 @@
 #pragma once
 
 #include <memory>
+#include <ostream>
 
 namespace yasync {
 
 enum class FutureState : unsigned int {
 	Suspended, Queued, Running, Awaiting, Completed
 };
+std::ostream& operator<<(std::ostream& os, const FutureState& state);
 
 class IFuture {
 	public:
