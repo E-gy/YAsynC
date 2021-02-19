@@ -154,12 +154,16 @@ class FileResource : public IAIOResource {
 				if(done) return ReadResult::Ok(data);
 				#ifdef _WIN32 //TODO FIXME a UB lives somewhere in here, appearing only on large data reads
 				if(engif->s == FutureState::Completed){
+					engif->s = FutureState::Running;
 					IOCompletionInfo result = *engif->r;
 					if(!result.status){
 						if(result.lerr == ERROR_HANDLE_EOF){
 							done = true;
 							return ReadResult::Ok(data);
-						} else return retSysError<ReadResult>("Async Read failure", result.lerr);
+						} else {
+							done = true;
+							return retSysError<ReadResult>("Async Read failure", result.lerr);
+						}
 					} else {
 						data.insert(data.end(), buffer.begin(), buffer.begin()+result.transferred);
 						overlapped()->Offset += result.transferred;
@@ -183,7 +187,9 @@ class FileResource : public IAIOResource {
 					case ERROR_HANDLE_EOF:
 						done = true;
 						return ReadResult::Ok(data);;
-					default: return retSysError<ReadResult>("Sync Read failure");
+					default:
+						done = true;
+						return retSysError<ReadResult>("Sync Read failure");
 				}
 				#else
 				{
@@ -192,8 +198,12 @@ class FileResource : public IAIOResource {
 					else if(*rr.ok()) return engif;
 				}
 				if(engif->s == FutureState::Completed){
+					engif->s = FutureState::Running;
 					int leve = *engif->r;
-					if(leve != EPOLLIN) return retSysError<ReadResult>("Epoll wrong event");
+					if(leve != EPOLLIN){
+						done = true;
+						return retSysError<ReadResult>("Epoll wrong event");
+					}
 					int transferred;
 					while((transferred = ::read(res->rh, buffer.data(), buffer.size())) > 0){
 						data.insert(data.end(), buffer.begin(), buffer.begin()+transferred);
@@ -206,11 +216,13 @@ class FileResource : public IAIOResource {
 						done = true;
 						return ReadResult::Ok(data);;
 					}
-					if(errno != EWOULDBLOCK && errno != EAGAIN) return retSysError<ReadResult>("Read failed");
+					if(errno != EWOULDBLOCK && errno != EAGAIN){
+						done = true;
+						return retSysError<ReadResult>("Read failed");
+					}
 				}
 				if(auto e = epollRearm(true).err()) return ReadResult::Err(*e);
 				#endif
-				engif->s = FutureState::Running;
 				return engif;
 			}, std::vector<char>()));
 		}
@@ -221,9 +233,12 @@ class FileResource : public IAIOResource {
 				if(done) return WriteResult::Ok();
 				#ifdef _WIN32
 				if(engif->s == FutureState::Completed){
+					engif->s = FutureState::Running;
 					IOCompletionInfo result = *engif->r;
-					if(!result.status) return retSysError<WriteResult>("Async Write failed", result.lerr);
-					else {
+					if(!result.status){
+						done = true;
+						return retSysError<WriteResult>("Async Write failed", result.lerr);
+					} else {
 						data.erase(data.begin(), data.begin()+result.transferred);
 						overlapped()->Offset += result.transferred;
 						if(data.empty()){
@@ -241,7 +256,10 @@ class FileResource : public IAIOResource {
 						return WriteResult::Ok();
 					}
 				}
-				if(::GetLastError() != ERROR_IO_PENDING) return retSysError<WriteResult>("Sync Write failed");
+				if(::GetLastError() != ERROR_IO_PENDING){
+					done = true;
+					return retSysError<WriteResult>("Sync Write failed");
+				}
 				#else
 				{
 					auto rr = lazyEpollReg(true);
@@ -249,8 +267,12 @@ class FileResource : public IAIOResource {
 					else if(*rr.ok()) return engif;
 				}
 				if(engif->s == FutureState::Completed){
+					engif->s = FutureState::Running;
 					int leve = *engif->r;
-					if(leve != EPOLLOUT) return retSysError<WriteResult>("Epoll wrong event");
+					if(leve != EPOLLOUT){
+						done = true;
+						return retSysError<WriteResult>("Epoll wrong event");
+					}
 					int transferred;
 					while((transferred = ::write(res->rh, data.data(), data.size())) >= 0){
 						data.erase(data.begin(), data.begin()+transferred);
@@ -259,11 +281,13 @@ class FileResource : public IAIOResource {
 							return WriteResult::Ok();
 						}
 					}
-					if(errno != EWOULDBLOCK && errno != EAGAIN) return retSysError<WriteResult>("Write failed");
+					if(errno != EWOULDBLOCK && errno != EAGAIN){
+						done = true;
+						return retSysError<WriteResult>("Write failed");
+					}
 				}
 				if(auto e = epollRearm(true).err()) return WriteResult::Err(*e);
 				#endif
-				engif->s = FutureState::Running;
 				return engif;
 			}, data));
 		}
@@ -345,7 +369,10 @@ void IOYengine::iothreadwork(){
 		#else
 		::epoll_event event;
 		auto es = ::epoll_wait(ioEpoll, &event, 1, -1);
-		if(es < 0) throw std::runtime_error(printSysError("Epoll wait failed"));
+		if(es < 0) switch(errno){
+			case EINTR: break;
+			default: throw std::runtime_error(printSysError("Epoll wait failed"));
+		}
 		else if(es == 0 || event.data.ptr == this) break;
 		else reinterpret_cast<IResource*>(event.data.ptr)->notify(event.events);
 		#endif
