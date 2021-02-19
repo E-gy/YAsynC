@@ -188,7 +188,7 @@ class FileResource : public IAIOResource {
 				#else
 				{
 					auto rr = lazyEpollReg(false);
-					if(auto err = rr.error()) return ReadResult::Err(*err);
+					if(auto err = rr.err()) return ReadResult::Err(*err);
 					else if(*rr.ok()) return engif;
 				}
 				if(engif->s == FutureState::Completed){
@@ -208,7 +208,7 @@ class FileResource : public IAIOResource {
 					}
 					if(errno != EWOULDBLOCK && errno != EAGAIN) return retSysError<ReadResult>("Read failed");
 				}
-				if(auto e = epollRearm(true).error()) return ReadResult::(*e);
+				if(auto e = epollRearm(true).err()) return ReadResult::Err(*e);
 				#endif
 				engif->s = FutureState::Running;
 				return engif;
@@ -245,7 +245,7 @@ class FileResource : public IAIOResource {
 				#else
 				{
 					auto rr = lazyEpollReg(true);
-					if(auto err = rr.error()) return WriteResult::Err(*err);
+					if(auto err = rr.err()) return WriteResult::Err(*err);
 					else if(*rr.ok()) return engif;
 				}
 				if(engif->s == FutureState::Completed){
@@ -261,7 +261,7 @@ class FileResource : public IAIOResource {
 					}
 					if(errno != EWOULDBLOCK && errno != EAGAIN) return retSysError<WriteResult>("Write failed");
 				}
-				if(auto e = epollRearm(true).error()) return WriteResult::Err(*e);
+				if(auto e = epollRearm(true).err()) return WriteResult::Err(*e);
 				#endif
 				engif->s = FutureState::Running;
 				return engif;

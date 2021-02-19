@@ -12,7 +12,7 @@ SystemNetworkingStateControl::~SystemNetworkingStateControl(){
 }
 #else
 SystemNetworkingStateControl::SystemNetworkingStateControl(){}
-~SystemNetworkingStateControl::SystemNetworkingStateControl(){}
+SystemNetworkingStateControl::~SystemNetworkingStateControl(){}
 #endif
 
 #ifdef _WIN32
