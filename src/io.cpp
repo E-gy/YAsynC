@@ -125,7 +125,7 @@ class FileResource : public IAIOResource {
 			//self.get() == this   exists to memory-lock dangling IO resource to this lambda generator
 			return defer(lambdagen([this, self = slf.lock(), bytes]([[maybe_unused]] const Yengine* engine, bool& done, std::vector<char>& data) -> std::variant<AFuture, movonly<ReadResult>> {
 				if(done) return ReadResult::Ok(data);
-				#ifdef _WIN32 //TODO FIXME a UB lives somewhere in here, appearing only on large data reads
+				#ifdef _WIN32 //TODO FIXME a UB lives somewhere in here, making itself known only on large data reads
 				if(engif->s == FutureState::Completed){
 					engif->s = FutureState::Running;
 					IOCompletionInfo result = *engif->r;
