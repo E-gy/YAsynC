@@ -272,7 +272,7 @@ class IOYengine {
 };
 
 using FileOpenResult = result<IOResource, std::string>;
-FileOpenResult fileOpenRead(Yengine*, const std::string& path);
-FileOpenResult fileOpenWrite(Yengine*, const std::string& path);
+FileOpenResult fileOpenRead(IOYengine*, const std::string& path);
+FileOpenResult fileOpenWrite(IOYengine*, const std::string& path);
 
 }
