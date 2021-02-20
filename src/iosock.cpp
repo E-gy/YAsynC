@@ -3,15 +3,25 @@
 namespace yasync::io {
 
 NetworkedAddressInfo::NetworkedAddressInfo(::addrinfo* ads) : addresses(ads) {}
+NetworkedAddressInfo::NetworkedAddressInfo(NetworkedAddressInfo && mov){
+	addresses = mov.addresses;
+	mov.addresses = nullptr;
+}
+NetworkedAddressInfo& NetworkedAddressInfo::operator=(NetworkedAddressInfo && mov){
+	if(addresses) ::freeaddrinfo(addresses);
+	addresses = mov.addresses;
+	mov.addresses = nullptr;
+	return *this;
+}
 NetworkedAddressInfo::~NetworkedAddressInfo(){
-	::freeaddrinfo(addresses);
+	if(addresses) ::freeaddrinfo(addresses);
 }
 
-result<NetworkedAddressInfo, std::string> NetworkedAddressInfo::find(const std::string& node, const std::string& service, const ::addrinfo& hints){
+NetworkedAddressInfo::FindResult NetworkedAddressInfo::find(const std::string& addr, const std::string& port, const ::addrinfo& hints){
 	::addrinfo* ads;
-	auto err = ::getaddrinfo(node.c_str(), service.c_str(), &hints, &ads);
-	if(err) return result<NetworkedAddressInfo, std::string>::Err(std::string(::gai_strerror(err)));
-	return NetworkedAddressInfo(ads);
+	auto err = ::getaddrinfo(addr.c_str(), port.c_str(), &hints, &ads);
+	if(err) return NetworkedAddressInfo::FindResult::Err(std::string(reinterpret_cast<char*>(::gai_strerror(err))));
+	return NetworkedAddressInfo::FindResult::Ok(NetworkedAddressInfo(ads));
 }
 
 #ifdef _WIN32

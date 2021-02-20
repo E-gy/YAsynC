@@ -21,11 +21,16 @@
 namespace yasync::io {
 
 class NetworkedAddressInfo {
-	::addrinfo* addresses;
 	NetworkedAddressInfo(::addrinfo* ads);
 	public:
+		::addrinfo* addresses;
+		NetworkedAddressInfo(const NetworkedAddressInfo&) = delete;
+		NetworkedAddressInfo& operator=(const NetworkedAddressInfo&) = delete;
+		NetworkedAddressInfo(NetworkedAddressInfo &&);
+		NetworkedAddressInfo& operator=(NetworkedAddressInfo &&);
 		~NetworkedAddressInfo();
-		static result<NetworkedAddressInfo, std::string> find(const std::string& node, const std::string& service, const ::addrinfo& hints);
+		using FindResult = result<NetworkedAddressInfo, std::string>;
+		static FindResult find(const std::string& address, const std::string& port, const ::addrinfo& hints);
 };
 
 #ifdef _WIN32
@@ -135,10 +140,10 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 		Acc acceptor;
 	public:
 		IOYengine* const engine;
-		const AddressInfo address;
-		AListeningSocket(IOYengine* e, SocketHandle socket, AddressInfo addr, Errs era, Acc accept) : sock(socket), engif(new OutsideFuture<ListenEvent>()), erracc(era), acceptor(accept), engine(e), address(addr) {
+		AddressInfo address;
+		AListeningSocket(IOYengine* e, SocketHandle socket, Errs era, Acc accept) : sock(socket), engif(new OutsideFuture<ListenEvent>()), erracc(era), acceptor(accept), engine(e) {
 			#ifdef _WIN32
-			CreateIoCompletionPort(reinterpret_cast<HANDLE>(sock), engine->ioPo->rh, COMPLETION_KEY_IO, 0);
+			
 			#else
 			#endif
 		}
@@ -152,13 +157,20 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 		 * Starts listening
 		 * @returns future that will complete when the socket shutdowns, or errors.
 		 */
-		ListenResult listen(){
-			#ifdef _WIN32 //https://stackoverflow.com/a/50227324
-			if(::bind(sock, reinterpret_cast<const sockaddr*>(&address), sizeof(AddressInfo)) == SOCKET_ERROR) return retSysNetError<ListenResult>("WSA bind failed");
-			if(::listen(sock, SOMAXCONN) == SOCKET_ERROR) return retSysNetError<ListenResult>("WSA listen failed");
+		ListenResult listen(const NetworkedAddressInfo* addri){
+			{
+				std::optional<std::string> searchErr();
+				auto candidate = addri->addresses;
+				//https://stackoverflow.com/a/50227324
+				for(; candidate; candidate = candidate->ai_next) if(::bind(sock, candidate->ai_addr, candidate->ai_addrlen) == 0) if(::listen(sock, 200) == 0) break;
+				if(!candidate) return ListenResult::Err("Exhausted address space");
+				address = *reinterpret_cast<AddressInfo*>(candidate->ai_addr);
+			}
+			#ifdef _WIN32
+			// if(::listen(sock, 200) == SOCKET_ERROR) return retSysNetError<ListenResult>("WSA listen failed");
+			if(!CreateIoCompletionPort(reinterpret_cast<HANDLE>(sock), engine->ioPo->rh, COMPLETION_KEY_IO, 0)) return retSysError<ListenResult>("ioCP add failed");
 			#else
-			if(::bind(sock, reinterpret_cast<const sockaddr*>(&address), sizeof(AddressInfo)) < 0) return retSysNetError<ListenResult>("bind failed");
-			if(::listen(sock, 200) < 0) return retSysNetError<ListenResult>("listen failed");
+			// return retSysNetError<ListenResult>("listen failed");
 			{
 				::epoll_event epm;
 				epm.events = EPOLLIN|EPOLLONESHOT;
@@ -256,7 +268,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 		}
 };
 
-template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs, typename Acc> result<ListeningSocket<SDomain, SType, SProto, AddressInfo, Errs, Acc>, std::string> netListen(IOYengine* engine, AddressInfo address, Errs erracc, Acc acceptor){
+template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs, typename Acc> result<ListeningSocket<SDomain, SType, SProto, AddressInfo, Errs, Acc>, std::string> netListen(IOYengine* engine, Errs erracc, Acc acceptor){
 	using LSock = ListeningSocket<SDomain, SType, SProto, AddressInfo, Errs, Acc>;
 	SocketHandle sock;
 	#ifdef _WIN32
@@ -269,7 +281,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 	if(fsf < 0) return retSysError<result<LSock, std::string>>("socket get flags failed"); 
 	if(fcntl(sock, F_SETFL, fsf|O_NONBLOCK) < 0) return retSysError<result<LSock, std::string>>("socket set non-blocking failed");
 	#endif
-	return result<LSock, std::string>::Ok(LSock(new AListeningSocket<SDomain, SType, SProto, AddressInfo, Errs, Acc>(engine, sock, address, erracc, acceptor)));
+	return result<LSock, std::string>::Ok(LSock(new AListeningSocket<SDomain, SType, SProto, AddressInfo, Errs, Acc>(engine, sock, erracc, acceptor)));
 }
 
 
