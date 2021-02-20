@@ -7,6 +7,7 @@
 #include <windows.h>
 #else
 #include <signal.h>
+#include <semaphore.h>
 #endif
 
 namespace yasync::io {
@@ -14,6 +15,7 @@ namespace yasync::io {
 static bool stahp = false;
 
 #ifdef _WIN32
+void CtrlC::setup(){}
 static ResourceHandle ctrlcEvent = INVALID_HANDLE_VALUE;
 BOOL WINAPI ctrlcHandler(DWORD sig){
 	if(ctrlcEvent == INVALID_HANDLE_VALUE) return FALSE;
@@ -25,13 +27,16 @@ BOOL WINAPI ctrlcHandler(DWORD sig){
 		default: return FALSE;
     }
 }
-void CtrlC::setup(){}
 #else
 void CtrlC::setup(){
 	sigset_t sigs;
 	::sigemptyset(&sigs);
 	::sigaddset(&sigs, SIGINT);
 	::pthread_sigmask(SIG_BLOCK, &sigs, NULL);
+}
+static ::sem_t ctrlcEvent;
+void ctrlcHandler(int sig){
+	if(sig == SIGINT) ::sem_post(&ctrlcEvent);
 }
 #endif
 
@@ -42,9 +47,11 @@ result<Future<void>, std::string> CtrlC::on(Yengine* engine){
 	ctrlcEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
 	if(!::SetConsoleCtrlHandler(ctrlcHandler, true)) return retSysError<result<Future<void>, std::string>>("Set ctrl+c handler failed");
 	#else
-	sigset_t sigs;
-	::sigemptyset(&sigs);
-	::sigaddset(&sigs, SIGINT);
+	::sem_init(&ctrlcEvent, 0, 0);
+	struct ::sigaction sa = {};
+	sa.sa_handler = ctrlcHandler;
+	::sigemptyset(&sa.sa_mask);
+	::sigaction(SIGINT, &sa, NULL);
 	#endif
 	std::shared_ptr<OutsideFuture<void>> n(new OutsideFuture<void>());
 	Daemons::launch([=](){
@@ -52,14 +59,24 @@ result<Future<void>, std::string> CtrlC::on(Yengine* engine){
 			#ifdef _WIN32
 			::WaitForSingleObject(ctrlcEvent, INFINITE);
 			#else
-			int sig;
-			::sigwait(&sigs, &sig);
+			if(::sem_wait(&ctrlcEvent) < 0 && !stahp) continue;
 			#endif
 			if(stahp) break;
 			n->s = FutureState::Completed;
 			engine->notify(std::static_pointer_cast<IFutureT<void>>(n));
 		}
-		stahp = false;
+		#ifdef _WIN32
+		ResourceHandle c = INVALID_HANDLE_VALUE;
+		std::swap(ctrlcEvent, c);
+		::CloseHandle(c);
+		//SetConsoleCtrlHandler(NULL, false);
+		#else
+		::sem_destroy(&ctrlcEvent);
+		// struct sigaction sigh = {};
+		// sigh.sa_handler = SIG_DFL;
+		// ::sigemptyset(&sigh.sa_mask);
+		// ::sigaction(SIGINT, &sigh, NULL);
+		#endif
 	});
 	return result<Future<void>, std::string>::Ok(n);
 }
@@ -71,16 +88,8 @@ void CtrlC::un(){
 	stahp = true;
 	#ifdef _WIN32
 	::SetEvent(ctrlcEvent);
-	ResourceHandle c = INVALID_HANDLE_VALUE;
-	std::swap(ctrlcEvent, c);
-	::CloseHandle(c);
-	//SetConsoleCtrlHandler(NULL, false);
 	#else
-	raise(SIGINT);
-	// struct sigaction sigh = {};
-	// sigh.sa_handler = SIG_DFL;
-	// ::sigemptyset(&sigh.sa_mask);
-	// ::sigaction(SIGINT, &sigh, NULL);
+	::sem_post(&ctrlcEvent);
 	#endif
 }
 
