@@ -2,6 +2,18 @@
 
 namespace yasync::io {
 
+NetworkedAddressInfo::NetworkedAddressInfo(::addrinfo* ads) : addresses(ads) {}
+NetworkedAddressInfo::~NetworkedAddressInfo(){
+	::freeaddrinfo(addresses);
+}
+
+result<NetworkedAddressInfo, std::string> NetworkedAddressInfo::find(const std::string& node, const std::string& service, const ::addrinfo& hints){
+	::addrinfo* ads;
+	auto err = ::getaddrinfo(node.c_str(), service.c_str(), &hints, &ads);
+	if(err) return result<NetworkedAddressInfo, std::string>::Err(std::string(::gai_strerror(err)));
+	return NetworkedAddressInfo(ads);
+}
+
 #ifdef _WIN32
 SystemNetworkingStateControl::SystemNetworkingStateControl(){
 	WSADATA Wsa = {};

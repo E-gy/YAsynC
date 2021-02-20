@@ -6,6 +6,7 @@
 
 #ifdef _WIN32
 #include <mswsock.h>
+#include <ws2tcpip.h>
 #else
 #include <sys/epoll.h>
 #include <unistd.h>
@@ -14,9 +15,18 @@
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <netinet/ip.h>
+#include <netdb.h>
 #endif
 
 namespace yasync::io {
+
+class NetworkedAddressInfo {
+	::addrinfo* addresses;
+	NetworkedAddressInfo(::addrinfo* ads);
+	public:
+		~NetworkedAddressInfo();
+		static result<NetworkedAddressInfo, std::string> find(const std::string& node, const std::string& service, const ::addrinfo& hints);
+};
 
 #ifdef _WIN32
 using SocketHandle = SOCKET;
