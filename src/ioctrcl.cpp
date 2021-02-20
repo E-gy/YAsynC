@@ -76,6 +76,7 @@ void CtrlC::un(){
 	::CloseHandle(c);
 	//SetConsoleCtrlHandler(NULL, false);
 	#else
+	raise(SIGINT);
 	// struct sigaction sigh = {};
 	// sigh.sa_handler = SIG_DFL;
 	// ::sigemptyset(&sigh.sa_mask);
