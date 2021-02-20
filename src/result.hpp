@@ -2,6 +2,7 @@
 
 #include <variant>
 #include <optional>
+#include <utility>
 
 template<typename S, typename E> class result {
 	std::variant<S, E> res;
@@ -13,8 +14,8 @@ template<typename S, typename E> class result {
 		using ERR = E;
 		result(const S& ok) : res(ok) {}
 		result(const E& err) : res(err) {}
-		result(S && ok) : res(ok) {}
-		result(E && err) : res(err) {}
+		result(S && ok) : res(std::forward<S>(ok)) {}
+		result(E && err) : res(std::forward<E>(err)) {}
 		bool isOk() const { return res.index() == 0; }
 		bool isErr() const { return res.index() == 1; }
 		const S* ok() const { return std::get_if<S>(&res); }
@@ -35,15 +36,15 @@ template<typename S, typename E> class result {
 	public:
 		static result Ok(const S& ok){ return result(ok); }
 		static result Err(const E& err){ return result(err); }
-		static result Ok(S && ok){ return result(ok); }
-		static result Err(E && err){ return result(err); }
+		static result Ok(S && ok){ return result(std::forward<S>(ok)); }
+		static result Err(E && err){ return result(std::forward<E>(err)); }
 };
 template<typename T> class result<T, T> {
 	bool okay;
 	T thing;
 	protected:
-		result(const bool& ok, const T& t) : okay(ok), thing(t) {}
-		result(const bool& ok, T && t) : okay(ok), thing(t) {}
+		result(const bool& ok, const T& t) : okay(ok), thing(std::forward<T>(t)) {}
+		result(const bool& ok, T && t) : okay(ok), thing(std::forward<T>(t)) {}
 	public:
 		using OK = T;
 		using ERR = T;
@@ -67,8 +68,8 @@ template<typename T> class result<T, T> {
 	public:
 		static result Ok(const T& ok){ return result(true, ok); }
 		static result Err(const T& err){ return result(false, err); }
-		static result Ok(T && ok){ return result(true, ok); }
-		static result Err(T && err){ return result(false, err); }
+		static result Ok(T && ok){ return result(true, std::forward<T>(ok)); }
+		static result Err(T && err){ return result(false, std::forward<T>(err)); }
 };
 template<typename S> class result<S, void> {
 	std::optional<S> okay;
@@ -76,6 +77,7 @@ template<typename S> class result<S, void> {
 		using OK = S;
 		using ERR = void;
 		result(const S& ok) : okay(ok) {}
+		result(S && ok) : okay(std::forward<S>(ok)) {}
 		result() : okay() {}
 		bool isOk() const { return okay.has_value(); }
 		bool isErr() const { return !okay.has_value(); }
@@ -93,7 +95,7 @@ template<typename S> class result<S, void> {
 		}
 	public:
 		static result Ok(const S& ok){ return result(ok); }
-		static result Ok(S && ok){ return result(ok); }
+		static result Ok(S && ok){ return result(std::forward<S>(ok)); }
 		static result Err(){ return result(); }
 };
 template<typename E> class result<void, E> {
@@ -103,6 +105,7 @@ template<typename E> class result<void, E> {
 		using ERR = E;
 		result() : error() {}
 		result(const E& e) : error(e) {}
+		result(E && e) : error(std::forward<E>(e)) {}
 		bool isOk() const { return !error.has_value(); }
 		bool isErr() const { return error.has_value(); }
 		const E* err() const { return error.has_value() ? error.operator->() : nullptr; }
@@ -120,7 +123,7 @@ template<typename E> class result<void, E> {
 	public:
 		static result Ok(){ return result(); }
 		static result Err(const E& err){ return result(err); }
-		static result Err(E && err){ return result(err); }
+		static result Err(E && err){ return result(std::forward<E>(err)); }
 };
 template<> class result<void, void> {
 	bool okay;
