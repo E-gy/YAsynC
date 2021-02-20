@@ -20,7 +20,7 @@ NetworkedAddressInfo::~NetworkedAddressInfo(){
 NetworkedAddressInfo::FindResult NetworkedAddressInfo::find(const std::string& addr, const std::string& port, const ::addrinfo& hints){
 	::addrinfo* ads;
 	auto err = ::getaddrinfo(addr.c_str(), port.c_str(), &hints, &ads);
-	if(err) return NetworkedAddressInfo::FindResult::Err(std::string(reinterpret_cast<char*>(::gai_strerror(err))));
+	if(err) return NetworkedAddressInfo::FindResult::Err(std::string(reinterpret_cast<const char*>(::gai_strerror(err))));
 	return NetworkedAddressInfo::FindResult::Ok(NetworkedAddressInfo(ads));
 }
 
