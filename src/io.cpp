@@ -368,6 +368,7 @@ void IOYengine::iothreadwork(SharedResource ioPo){
 		::epoll_event event;
 		auto es = ::epoll_wait(ioPo->rh, &event, 1, -1);
 		if(es < 0) switch(errno){
+			case EBADF: return;
 			case EINTR: break;
 			default: throw std::runtime_error(printSysError("Epoll wait failed"));
 		}
