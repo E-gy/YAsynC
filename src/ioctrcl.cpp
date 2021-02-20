@@ -20,33 +20,40 @@ BOOL WINAPI ctrlcHandler(DWORD sig){
 	switch(sig){
 		case CTRL_C_EVENT:
 		case CTRL_CLOSE_EVENT:
-			SetEvent(ctrlcEvent);
+			::SetEvent(ctrlcEvent);
 			return TRUE;
 		default: return FALSE;
     }
 }
+void CtrlC::setup(){}
 #else
+void CtrlC::setup(){
+	sigset_t sigs;
+	::sigemptyset(&sigs);
+	::sigaddset(&sigs, SIGINT);
+	::pthread_sigmask(SIG_BLOCK, &sigs, NULL);
+}
 #endif
 
-result<Future<void>, std::string> onCtrlC(Yengine* engine){
+result<Future<void>, std::string> CtrlC::on(Yengine* engine){
 	stahp = false;
 	#ifdef _WIN32
 	if(ctrlcEvent != INVALID_HANDLE_VALUE) return result<Future<void>, std::string>::Err("ctrl+c handler already set!");
 	ctrlcEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-	if(!SetConsoleCtrlHandler(ctrlcHandler, true)) return retSysError<result<Future<void>, std::string>>("Set ctrl+c handler failed");
+	if(!::SetConsoleCtrlHandler(ctrlcHandler, true)) return retSysError<result<Future<void>, std::string>>("Set ctrl+c handler failed");
 	#else
 	sigset_t sigs;
-	sigemptyset(&sigs);
-	sigaddset(&sigs, SIGINT);
+	::sigemptyset(&sigs);
+	::sigaddset(&sigs, SIGINT);
 	#endif
 	std::shared_ptr<OutsideFuture<void>> n(new OutsideFuture<void>());
 	Daemons::launch([=](){
 		while(true){
 			#ifdef _WIN32
-			WaitForSingleObject(ctrlcEvent, INFINITE);
+			::WaitForSingleObject(ctrlcEvent, INFINITE);
 			#else
 			int sig;
-			sigwait(&sigs, &sig);
+			::sigwait(&sigs, &sig);
 			#endif
 			if(stahp) break;
 			n->s = FutureState::Completed;
@@ -56,23 +63,23 @@ result<Future<void>, std::string> onCtrlC(Yengine* engine){
 	});
 	return result<Future<void>, std::string>::Ok(n);
 }
-void unCtrlC(){
+void CtrlC::un(){
 	#ifdef _WIN32
 	if(ctrlcEvent == INVALID_HANDLE_VALUE) return;
 	#else
 	#endif
 	stahp = true;
 	#ifdef _WIN32
-	SetEvent(ctrlcEvent);
+	::SetEvent(ctrlcEvent);
 	ResourceHandle c = INVALID_HANDLE_VALUE;
 	std::swap(ctrlcEvent, c);
-	CloseHandle(c);
+	::CloseHandle(c);
 	//SetConsoleCtrlHandler(NULL, false);
 	#else
-	struct sigaction sigh = {};
-	sigh.sa_handler = SIG_DFL;
-	sigemptyset(&sigh.sa_mask);
-	sigaction(SIGINT, &sigh, NULL);
+	// struct sigaction sigh = {};
+	// sigh.sa_handler = SIG_DFL;
+	// ::sigemptyset(&sigh.sa_mask);
+	// ::sigaction(SIGINT, &sigh, NULL);
 	#endif
 }
 

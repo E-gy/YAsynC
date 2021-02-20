@@ -5,11 +5,15 @@
 
 namespace yasync::io {
 
-[[deprecated]]
-result<Future<void>, std::string> onCtrlC(Yengine*);
-[[deprecated]]
-void unCtrlC();
+class CtrlC {
+	public:
+		static void setup();
+		static result<Future<void>, std::string> on(Yengine*);
+		static void un();
 
+};
+
+[[deprecated]]
 result<void, std::string> mainThreadWaitCtrlC();
 
 }
