@@ -267,7 +267,7 @@ class IOYengine {
 		#ifdef _WIN32
 		static constexpr unsigned ioThreads = 1; //IO events are dispatched by notification to the engine
 		#else
-		fd_t cfdStopSend, cfdStopReceive;
+		SharedResource cfdStopSend, cfdStopReceive;
 		#endif
 };
 
