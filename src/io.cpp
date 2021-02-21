@@ -39,7 +39,7 @@ IOYengine::IOYengine(Yengine* e) : engine(e),
 	#endif
 {
 	#ifdef _WIN32
-	for(unsigned i = 0; i < ioThreads; i++) Daemons::launch([this](){ iothreadwork(ioPo); });
+	for(unsigned i = 0; i < ioThreads; i++) Daemons::launch([this](){ iothreadwork(); });
 	#else
 	if(ioPo->rh < 0) throw std::runtime_error("Initalizing EPoll failed");
 	fd_t pipe2[2];
