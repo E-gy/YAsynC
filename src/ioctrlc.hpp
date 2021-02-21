@@ -10,7 +10,6 @@ class CtrlC {
 		static void setup();
 		static result<Future<void>, std::string> on(Yengine*);
 		static void un();
-
 };
 
 [[deprecated]]
