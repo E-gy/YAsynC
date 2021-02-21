@@ -222,12 +222,22 @@ class Yengine {
 			return execute(defer(gen));
 		}
 		/**
-		 * Notifies the engine of completion of an external future.
+		 * Notifies the engine of completion, or cancellation, of an external future.
 		 * Returns almost immediately - actual processing of the notification will happen internally.
+		 * !!!USE CANCELLATION WITH CARE!!!
+		 * On cancellation the entire awaited chain is yeeted into oblivion.
 		 */
 		template<typename T> void notify(Future<T> f){
 			work.push(f);
 		}
+		/**
+		 * Notifies the engine of cancellation of an external future.
+		 * !!!USE CANCELLATION WITH CARE!!!
+		 * On cancellation the entire awaited chain is yeeted into oblivion.
+		 * 
+		 * _It is just an alias for notify._
+		 */
+		template<typename T> void cancelled(Future<T> f){ notify(f); }
 	private:
 		std::condition_variable condWLE;
 		std::mutex notificationsLock;
@@ -244,8 +254,11 @@ class Yengine {
 			if(notifications.empty()) condWLE.notify_all();
 			return ret;
 		}
-		void threado(AFuture task){
-			if(task->state() == FutureState::Completed){ //completed outside futures (via notify)
+		void threado(AFuture task){ 
+			if(task->state() == FutureState::Cancelled){ //TODO let generators manage cancellations actually. But already it requires fixing a lot of them, so implement default behaviour for now
+				while(auto naut = notifiDrop(task)) task = *naut; //which is nuking the await chain. COOOL
+				return;
+			} if(task->state() == FutureState::Completed){ //completed outside futures (via notify)
 				if(auto naut = notifiDrop(task)) task = *naut; //chained future contains backref to the outside task and will steal the result itself like a good one
 				else return; //nothing to chain outside future with
 			} else if(task->state() > FutureState::Running) return; //Only suspended tasks are resumeable

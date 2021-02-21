@@ -7,7 +7,7 @@
 namespace yasync {
 
 enum class FutureState : unsigned int {
-	Suspended, Queued, Running, Awaiting, Completed
+	Suspended, Queued, Running, Awaiting, Completed, Cancelled
 };
 std::ostream& operator<<(std::ostream& os, const FutureState& state);
 
