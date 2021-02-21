@@ -263,7 +263,7 @@ class IOYengine {
 		IOResource taek(HandledResource r);
 	private:
 		friend class IResource;
-		void iothreadwork(SharedResource ioPo);
+		void iothreadwork();
 		#ifdef _WIN32
 		static constexpr unsigned ioThreads = 1; //IO events are dispatched by notification to the engine
 		#else

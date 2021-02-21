@@ -50,7 +50,7 @@ IOYengine::IOYengine(Yengine* e) : engine(e),
 	epm.events = EPOLLHUP | EPOLLERR | EPOLLONESHOT;
 	epm.data.ptr = this;
 	if(::epoll_ctl(ioPo->rh, EPOLL_CTL_ADD, cfdStopReceive, &epm)) throw std::runtime_error("Initalizing close down pipe epoll failed");
-	Daemons::launch([this](){ iothreadwork(ioPo); });
+	Daemons::launch([this](){ iothreadwork(); });
 	#endif
 }
 
@@ -354,7 +354,8 @@ IORWriter IAIOResource::writer(){
 }
 
 
-void IOYengine::iothreadwork(SharedResource ioPo){
+void IOYengine::iothreadwork(){
+	auto ioPo = this->ioPo;
 	while(true){
 		#ifdef _WIN32
 		IOCompletionInfo inf;
