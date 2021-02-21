@@ -270,6 +270,7 @@ class Yengine {
 			auto g = gent->gen->resume(this);
 			if(auto awa = std::get_if<AFuture>(&g)){
 				switch((*awa)->state()){
+					case FutureState::Cancelled:
 					case FutureState::Completed:
 						// goto cont;
 						break;
