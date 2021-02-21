@@ -133,7 +133,7 @@ void CtrlC::un(Yengine* engine){
 	return CtrlC_::INSTANCE()->un(engine);
 }
 
-result<void, std::string> mainThreadWaitCtrlC(){
+/*result<void, std::string> mainThreadWaitCtrlC(){
 	#ifdef _WIN32
 	if(ctrlcEvent != INVALID_HANDLE_VALUE) return result<void, std::string>::Err("ctrl+c handler already set!");
 	ctrlcEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
@@ -149,6 +149,6 @@ result<void, std::string> mainThreadWaitCtrlC(){
 	sigwait(&sigs, &sig);
 	#endif
 	return result<void, std::string>::Ok();
-}
+}*/
 
 }

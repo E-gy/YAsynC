@@ -12,7 +12,4 @@ class CtrlC {
 		static void un(Yengine*);
 };
 
-[[deprecated]]
-result<void, std::string> mainThreadWaitCtrlC();
-
 }
