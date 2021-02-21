@@ -23,12 +23,10 @@ void CtrlC::setup(){
 }
 
 #ifdef _WIN32
-BOOL WINAPI glCtrlcHandler(DWORD sig){
+BOOL WINAPI glCtrlcHandler(DWORD sig);
 #else
-void glCtrlcHandler(int sig){
+void glCtrlcHandler(int sig);
 #endif
-	return CtrlC_::INSTANCE()->ctrlcHandler(sig);
-}
 
 class CtrlC_ {
 	bool stahp = false;
@@ -37,6 +35,7 @@ class CtrlC_ {
 	#else
 	::sem_t ctrlcEvent;
 	#endif
+	std::weak_ptr<OutsideFuture<void>> notif;
 	CtrlC_(){};
 	public:
 		static CtrlC_* INSTANCE(){
@@ -97,9 +96,10 @@ class CtrlC_ {
 				// ::sigaction(SIGINT, &sigh, NULL);
 				#endif
 			});
+			notif = n;
 			return result<Future<void>, std::string>::Ok(n);
 		}
-		void un(){
+		void un(Yengine* engine){
 			#ifdef _WIN32
 			if(ctrlcEvent == INVALID_HANDLE_VALUE) return;
 			#else
@@ -110,14 +110,27 @@ class CtrlC_ {
 			#else
 			::sem_post(&ctrlcEvent);
 			#endif
+			if(!notif.expired()){
+				auto t = notif.lock();
+				t->s = FutureState::Cancelled;
+				engine->cancelled(std::static_pointer_cast<IFutureT<void>>(t));
+			}
 		}
 };
+
+#ifdef _WIN32
+BOOL WINAPI glCtrlcHandler(DWORD sig){
+#else
+void glCtrlcHandler(int sig){
+#endif
+	return CtrlC_::INSTANCE()->ctrlcHandler(sig);
+}
 
 result<Future<void>, std::string> CtrlC::on(Yengine* engine){
 	return CtrlC_::INSTANCE()->on(engine);
 }
-void CtrlC::un(){
-	return CtrlC_::INSTANCE()->un();
+void CtrlC::un(Yengine* engine){
+	return CtrlC_::INSTANCE()->un(engine);
 }
 
 result<void, std::string> mainThreadWaitCtrlC(){
