@@ -32,7 +32,7 @@ template<typename T> class movonly {
 		movonly() : t() {}
 		movonly(T* pt) : t(pt) {}
 		movonly(const T& vt) : t(new T(vt)) {} 
-		movonly(T && vt) : t(new T(vt)) {}
+		movonly(T && vt) : t(new T(std::move(vt))) {}
 		~movonly() = default;
 		movonly(movonly && mov) noexcept { t = std::move(mov.t); }
 		movonly& operator=(movonly && mov) noexcept { t = std::move(mov.t); return *this; }
