@@ -289,24 +289,25 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 	return result<LSock, std::string>::Ok(LSock(new AListeningSocket<SDomain, SType, SProto, AddressInfo, Errs, Acc>(engine, sock, erracc, acceptor)));
 }
 
-using ConnectionResult = result<HandledStrayIOSocket, std::string>;
+using ConnectionResultSock = result<HandledStrayIOSocket, std::string>;
+using ConnectionResult = result<IOResource, std::string>;
 
 class ConnectingSocket : public IResource {
 	public:
 		IOYengine* engine;
 		HandledStrayIOSocket sock;
-		std::shared_ptr<OutsideFuture<ConnectionResult>> redy;
-		ConnectingSocket(IOYengine* e, HandledStrayIOSocket && s) : engine(e), sock(std::move(s)), redy(new OutsideFuture<ConnectionResult>()) {}
+		std::shared_ptr<OutsideFuture<ConnectionResultSock>> redy;
+		ConnectingSocket(IOYengine* e, HandledStrayIOSocket && s) : engine(e), sock(std::move(s)), redy(new OutsideFuture<ConnectionResultSock>()) {}
 		void notify(IOCompletionInfo inf) override {
 			redy->s = FutureState::Completed;
 			#ifdef _WIN32
-			if(inf.status) redy->r = ConnectionResult::Ok(std::move(sock));
-			else redy->r = retSysNetError<ConnectionResult>("ConnectEx async failed", inf.lerr);
+			if(inf.status) redy->r = ConnectionResultSock::Ok(std::move(sock));
+			else redy->r = retSysNetError<ConnectionResultSock>("ConnectEx async failed", inf.lerr);
 			#else
-			if(inf == EPOLLOUT) redy->r = ConnectionResult::Ok(std::move(sock));
-			else redy->r = retSysNetError<ConnectionResult>("connect async failed");
+			if(inf == EPOLLOUT) redy->r = ConnectionResultSock::Ok(std::move(sock));
+			else redy->r = retSysNetError<ConnectionResultSock>("connect async failed");
 			#endif
-			engine->engine->notify(std::static_pointer_cast<IFutureT<ConnectionResult>>(redy));
+			engine->engine->notify(std::static_pointer_cast<IFutureT<ConnectionResultSock>>(redy));
 		}
 };
 
@@ -347,7 +348,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo> result<Future
 		#endif
 		{
 			csock->redy->s = FutureState::Completed;
-			csock->redy->r = ConnectionResult::Ok(std::move(csock->sock));
+			csock->redy->r = ConnectionResultSock::Ok(std::move(csock->sock));
 			break;
 		}
 		#ifdef _WIN32
@@ -358,13 +359,14 @@ template<int SDomain, int SType, int SProto, typename AddressInfo> result<Future
 			break; //async connect, cross your fingers it succeeds. otherwise, and if there're remaining candidates, we're in deep quack
 	}
 	if(!candidate) return Result::Err("Exhausted address space");
-	return std::static_pointer_cast<IFutureT<ConnectionResult>>(csock->redy) >> [csock](ConnectionResult res){ //we need to grab `csock` so it lives until outside handover lul
+	return std::static_pointer_cast<IFutureT<ConnectionResultSock>>(csock->redy) >> [engine, csock](ConnectionResultSock res){ //we need to grab `csock` so it lives until outside handover lul
 		if(auto ok = res.ok()){
 			#ifdef _WIN32
 			if(::setsockopt((*ok)->sock(), SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT, NULL, 0)) return retSysNetError<ConnectionResult>("update context connect failed");
 			#endif
+			return ConnectionResult::Ok(engine->taek(HandledResource(ok->release())));
 		}
-		return res;
+		return ConnectionResult::Err(*res.err());
 	};
 }
 
