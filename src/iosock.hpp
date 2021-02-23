@@ -311,7 +311,7 @@ class ConnectingSocket : public IResource {
 		}
 };
 
-template<int SDomain, int SType, int SProto, typename AddressInfo> result<Future<ConnectionResult>, std::string> netConnectTo(IOYengine* engine, const NetworkedAddressInfo* addri, AddressInfo winIniBindTo){
+template<int SDomain, int SType, int SProto, typename AddressInfo> result<Future<ConnectionResult>, std::string> netConnectTo(IOYengine* engine, const NetworkedAddressInfo* addri, [[maybe_unused]] AddressInfo winIniBindTo){
 	using Result = result<Future<ConnectionResult>, std::string>;
 	SocketHandle sock;
 	HandledStrayIOSocket hsock; 
@@ -323,7 +323,8 @@ template<int SDomain, int SType, int SProto, typename AddressInfo> result<Future
 	sock = ::socket(SDomain, SType, SProto);
 	if(sock < 0) return retSysError<Result>("socket construction failed");
 	#endif
-	hsock = HandledStrayIOSocket(new AHandledStrayIOSocket(sock));
+	hsock = HandledStrayIOSocket(new AHandledStrayIOSocket(sock, true));
+	auto csock = std::shared_ptr<ConnectingSocket>(new ConnectingSocket(engine, std::move(hsock)));
 	#ifdef _WIN32
 	if(!::CreateIoCompletionPort(reinterpret_cast<HANDLE>(sock), engine->ioPo->rh, COMPLETION_KEY_IO, 0)) return retSysError<Result>("ioCP add failed");
 	#else
@@ -333,12 +334,10 @@ template<int SDomain, int SType, int SProto, typename AddressInfo> result<Future
 	{
 		::epoll_event epm;
 		epm.events = EPOLLOUT|EPOLLONESHOT;
-		epm.data.ptr = this;
+		epm.data.ptr = csock.get();
 		if(::epoll_ctl(engine->ioPo->rh, EPOLL_CTL_ADD, sock, &epm) < 0) return retSysError<Result>("epoll add failed");
 	}
 	#endif
-	hsock->iopor = true;
-	auto csock = std::shared_ptr<ConnectingSocket>(new ConnectingSocket(engine, std::move(hsock)));
 	auto candidate = addri->addresses;
 	for(; candidate; candidate = candidate->ai_next){
 		#ifdef _WIN32
@@ -354,7 +353,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo> result<Future
 		#ifdef _WIN32
 		if(WSAGetLastError() == ERROR_IO_PENDING)
 		#else
-		if(errno == EWOULDBLOCK || errno == EAGAIN)
+		if(errno == EWOULDBLOCK || errno == EAGAIN || errno == EINPROGRESS)
 		#endif
 			break; //async connect, cross your fingers it succeeds. otherwise, and if there're remaining candidates, we're in deep quack
 	}

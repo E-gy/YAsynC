@@ -97,7 +97,7 @@ class FileResource : public IAIOResource {
 				//That means that all r/w will succeed (and block). So we report ourselves ready for IO, and off to EOD we go!
 				engif->r = wr ? EPOLLOUT : EPOLLIN;
 				engif->s = FutureState::Completed;
-				return !(reged = true);
+				return !(res->iopor = true);
 			} else return retSysError<EPollRegResult>("Register to epoll failed");
 		}
 		return res->iopor = true;
