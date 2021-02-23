@@ -39,7 +39,7 @@ template<typename T> class movonly {
 		//no copy
 		movonly(const movonly& cpy) = delete;
 		movonly& operator=(const movonly& cpy) = delete;
-		auto operator*(){ return t.operator*(); }
+		auto operator*(){ return std::move(t.operator*()); }
 		auto operator->(){ return t.operator->(); }
 };
 template<> class movonly<void> {
