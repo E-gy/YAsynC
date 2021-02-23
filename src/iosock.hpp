@@ -289,5 +289,83 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 	return result<LSock, std::string>::Ok(LSock(new AListeningSocket<SDomain, SType, SProto, AddressInfo, Errs, Acc>(engine, sock, erracc, acceptor)));
 }
 
+using ConnectionResult = result<HandledStrayIOSocket, std::string>;
+
+class ConnectingSocket : public IResource {
+	public:
+		IOYengine* engine;
+		HandledStrayIOSocket sock;
+		std::shared_ptr<OutsideFuture<ConnectionResult>> redy;
+		ConnectingSocket(IOYengine* e, HandledStrayIOSocket && s) : engine(e), sock(std::move(s)), redy(new OutsideFuture<ConnectionResult>()) {}
+		void notify(IOCompletionInfo inf) override {
+			redy->s = FutureState::Completed;
+			#ifdef _WIN32
+			if(inf.status) redy->r = ConnectionResult::Ok(std::move(sock));
+			else redy->r = retSysNetError<ConnectionResult>("ConnectEx async failed", inf.lerr);
+			#else
+			if(inf == EPOLLOUT) redy->r = ConnectionResult::Ok(std::move(sock));
+			else redy->r = retSysNetError<ConnectionResult>("connect async failed");
+			#endif
+			engine->engine->notify(std::static_pointer_cast<IFutureT<ConnectionResult>>(redy));
+		}
+};
+
+template<int SDomain, int SType, int SProto, typename AddressInfo> result<Future<ConnectionResult>, std::string> netConnectTo(IOYengine* engine, const NetworkedAddressInfo* addri, AddressInfo winIniBindTo){
+	using Result = result<Future<ConnectionResult>, std::string>;
+	SocketHandle sock;
+	HandledStrayIOSocket hsock; 
+	#ifdef _WIN32
+	sock = ::WSASocket(SDomain, SType, SProto, NULL, 0, WSA_FLAG_OVERLAPPED);
+	if(sock == INVALID_SOCKET) return retSysError<Result>("WSA socket construction failed");
+	if(::bind(sock, reinterpret_cast<const sockaddr*>(&winIniBindTo), sizeof(AddressInfo)) < 0) return retSysError<Result>("WSA bind failed");
+	#else
+	sock = ::socket(SDomain, SType, SProto);
+	if(sock < 0) return retSysError<Result>("socket construction failed");
+	#endif
+	hsock = HandledStrayIOSocket(new AHandledStrayIOSocket(sock));
+	#ifdef _WIN32
+	if(!::CreateIoCompletionPort(reinterpret_cast<HANDLE>(sock), engine->ioPo->rh, COMPLETION_KEY_IO, 0)) return retSysError<Result>("ioCP add failed");
+	#else
+	int fsf = ::fcntl(sock, F_GETFL, 0);
+	if(fsf < 0) return retSysError<Result>("socket get flags failed");
+	if(::fcntl(sock, F_SETFL, fsf|O_NONBLOCK) < 0) return retSysError<Result>("socket set non-blocking failed");
+	{
+		::epoll_event epm;
+		epm.events = EPOLLOUT|EPOLLONESHOT;
+		epm.data.ptr = this;
+		if(::epoll_ctl(engine->ioPo->rh, EPOLL_CTL_ADD, sock, &epm) < 0) return retSysError<Result>("epoll add failed");
+	}
+	#endif
+	hsock->iopor = true;
+	auto csock = std::shared_ptr<ConnectingSocket>(new ConnectingSocket(engine, std::move(hsock)));
+	auto candidate = addri->addresses;
+	for(; candidate; candidate = candidate->ai_next){
+		#ifdef _WIN32
+		if(SystemNetworkingStateControl::MSWSA.ConnectEx(sock, candidate->ai_addr, candidate->ai_addrlen, NULL, 0, NULL, csock->overlapped()))
+		#else
+		if(::connect(sock, candidate->ai_addr, candidate->ai_addrlen) == 0)
+		#endif
+		{
+			csock->redy->s = FutureState::Completed;
+			csock->redy->r = ConnectionResult::Ok(std::move(csock->sock));
+			break;
+		}
+		#ifdef _WIN32
+		if(WSAGetLastError() == ERROR_IO_PENDING)
+		#else
+		if(errno == EWOULDBLOCK || errno == EAGAIN)
+		#endif
+			break; //async connect, cross your fingers it succeeds. otherwise, and if there're remaining candidates, we're in deep quack
+	}
+	if(!candidate) return Result::Err("Exhausted address space");
+	return std::static_pointer_cast<IFutureT<ConnectionResult>>(csock->redy) >> [csock](ConnectionResult res){ //we need to grab `csock` so it lives until outside handover lul
+		if(auto ok = res.ok()){
+			#ifdef _WIN32
+			if(::setsockopt((*ok)->sock(), SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT, NULL, 0)) return retSysNetError<ConnectionResult>("update context connect failed");
+			#endif
+		}
+		return res;
+	};
+}
 
 }
