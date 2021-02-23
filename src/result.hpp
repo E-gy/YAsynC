@@ -45,7 +45,7 @@ template<typename T> class result<T, T> {
 	bool okay;
 	T thing;
 	protected:
-		result(const bool& ok, const T& t) : okay(ok), thing(std::forward<T>(t)) {}
+		result(const bool& ok, const T& t) : okay(ok), thing(t) {}
 		result(const bool& ok, T && t) : okay(ok), thing(std::forward<T>(t)) {}
 	public:
 		using OK = T;
