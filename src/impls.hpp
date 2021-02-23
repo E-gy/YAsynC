@@ -16,7 +16,7 @@ template<typename Iter, typename Capt> class IteratingGenerator : public IGenera
 		template<typename F1, typename F2> IteratingGenerator(Capt capt, F1 f1, F2 f2) : capture(capt), s(f1(capture)), e(f2(capture)), c(s) {}
 		bool done(){ return c != e; }
 		std::variant<AFuture, movonly<Iter>> resume([[maybe_unused]] const Yengine* engine){
-			return movonly<Iter>(c++);
+			return movonly<Iter>(c != e ? c++ : c);
 		}
 };
 
@@ -26,7 +26,7 @@ template<typename Iter> class IteratingGenerator<Iter, void> : public IGenerator
 		IteratingGenerator(Iter start, Iter end) : s(start), e(end), c(s) {}
 		bool done(){ return c != e; }
 		std::variant<AFuture, movonly<Iter>> resume([[maybe_unused]] const Yengine* engine){
-			return movonly<Iter>(c++);
+			return movonly<Iter>(c != e ? c++ : c);
 		}
 };
 
