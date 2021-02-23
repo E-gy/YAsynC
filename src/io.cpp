@@ -71,7 +71,7 @@ IOYengine::~IOYengine(){
 	#endif
 }*/
 
-IHandledResource::IHandledResource(ResourceHandle r) : rh(r) {}
+IHandledResource::IHandledResource(ResourceHandle r, bool b) : rh(r), iopor(b) {}
 IHandledResource::~IHandledResource(){}
 
 class FileResource : public IAIOResource {
@@ -85,10 +85,9 @@ class FileResource : public IAIOResource {
 	}
 	#ifdef _WIN32
 	#else
-	bool reged = false;
 	using EPollRegResult = result<bool, std::string>;
 	EPollRegResult lazyEpollReg(bool wr){
-		if(reged) return false;
+		if(res->iopor) return false;
 		::epoll_event epm;
 		epm.events = (wr ? EPOLLOUT : EPOLLIN) | EPOLLONESHOT;
 		epm.data.ptr = this;
@@ -101,11 +100,11 @@ class FileResource : public IAIOResource {
 				return !(reged = true);
 			} else return retSysError<EPollRegResult>("Register to epoll failed");
 		}
-		return reged = true;
+		return res->iopor = true;
 	}
 	using EPollRearmResult = result<void, std::string>;
 	EPollRearmResult epollRearm(bool wr){
-		if(!reged) return EPollRearmResult::Ok();
+		if(!res->iopor) return EPollRearmResult::Ok();
 		::epoll_event epm;
 		epm.events = (wr ? EPOLLOUT : EPOLLIN) | EPOLLONESHOT;
 		epm.data.ptr = this;
@@ -116,7 +115,10 @@ class FileResource : public IAIOResource {
 		friend class IOYengine;
 		FileResource(IOYengine* e, HandledResource hr) : IAIOResource(e), res(std::move(hr)), buffer(), engif(new OutsideFuture<IOCompletionInfo>()) {
 			#ifdef _WIN32
-			CreateIoCompletionPort(res->rh, e->ioPo->rh, COMPLETION_KEY_IO, 0);
+			if(!res->iopor){
+				CreateIoCompletionPort(res->rh, e->ioPo->rh, COMPLETION_KEY_IO, 0);
+				res->iopor = true;
+			}
 			#else
 			#endif
 		}

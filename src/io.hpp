@@ -34,7 +34,8 @@ class IOYengine;
 class IHandledResource {
 	public:
 		const ResourceHandle rh; //gotta go fast
-		IHandledResource(ResourceHandle r);
+		bool iopor;
+		IHandledResource(ResourceHandle r, bool iopor = false);
 		virtual ~IHandledResource() = 0;
 };
 using HandledResource = std::unique_ptr<IHandledResource>;
