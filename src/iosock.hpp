@@ -159,7 +159,6 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 		 */
 		ListenResult listen(const NetworkedAddressInfo* addri){
 			{
-				std::optional<std::string> searchErr();
 				auto candidate = addri->addresses;
 				//https://stackoverflow.com/a/50227324
 				for(; candidate; candidate = candidate->ai_next) if(::bind(sock, candidate->ai_addr, candidate->ai_addrlen) == 0) if(::listen(sock, 200) == 0) break;
