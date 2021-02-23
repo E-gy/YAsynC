@@ -52,6 +52,12 @@ class SystemNetworkingStateControl {
 		~SystemNetworkingStateControl();
 		SystemNetworkingStateControl(const SystemNetworkingStateControl&) = delete;
 		SystemNetworkingStateControl(SystemNetworkingStateControl&&) = delete;
+		#ifdef _WIN32
+		struct mswsock {
+			LPFN_CONNECTEX ConnectEx;
+		};
+		static mswsock MSWSA;
+		#endif
 };
 
 template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs, typename Acc> class AListeningSocket;

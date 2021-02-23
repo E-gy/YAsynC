@@ -25,9 +25,16 @@ NetworkedAddressInfo::FindResult NetworkedAddressInfo::find(const std::string& a
 }
 
 #ifdef _WIN32
+SystemNetworkingStateControl::mswsock SystemNetworkingStateControl::MSWSA = {};
 SystemNetworkingStateControl::SystemNetworkingStateControl(){
 	WSADATA Wsa = {};
 	WSAStartup(MAKEWORD(2,2), &Wsa);
+	SocketHandle dummy = socket(AF_INET, SOCK_STREAM, 0);
+	DWORD dummi;
+	GUID guid;
+	guid = WSAID_CONNECTEX;
+	WSAIoctl(dummy, SIO_GET_EXTENSION_FUNCTION_POINTER, &guid, sizeof(guid), &MSWSA.ConnectEx, sizeof(MSWSA.ConnectEx), &dummi, NULL, NULL);
+	closesocket(dummy);
 }
 SystemNetworkingStateControl::~SystemNetworkingStateControl(){
 	WSACleanup();
