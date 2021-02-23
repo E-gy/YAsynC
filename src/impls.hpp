@@ -8,13 +8,26 @@
 
 namespace yasync {
 
-class RangeGenerator : public IGeneratorT<int> {
-	int s, e;
-	int c;
+template<typename Iter, typename Capt> class IteratingGenerator : public IGeneratorT<Iter> {
+	Capt capture;
+	Iter s, e, c;
 	public:
-		RangeGenerator(int start, int end) : s(start), e(end), c(s-1) {}
-		bool done() const;
-		std::variant<AFuture, movonly<int>> resume(const Yengine* eng);
+		IteratingGenerator(Capt capt, Iter start, Iter end) : capture(capt), s(start), e(end), c(s) {}
+		template<typename F1, typename F2> IteratingGenerator(Capt capt, F1 f1, F2 f2) : capture(capt), s(f1(capture)), e(f2(capture)), c(s) {}
+		bool done(){ return c != e; }
+		std::variant<AFuture, movonly<Iter>> resume([[maybe_unused]] const Yengine* engine){
+			return movonly<Iter>(c++);
+		}
+};
+
+template<typename Iter> class IteratingGenerator<Iter, void> : public IGeneratorT<Iter> {
+	Iter s, e, c;
+	public:
+		IteratingGenerator(Iter start, Iter end) : s(start), e(end), c(s) {}
+		bool done(){ return c != e; }
+		std::variant<AFuture, movonly<Iter>> resume([[maybe_unused]] const Yengine* engine){
+			return movonly<Iter>(c++);
+		}
 };
 
 /*class UnFuture : public Future<void> {

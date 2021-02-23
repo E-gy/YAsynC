@@ -2,12 +2,6 @@
 
 namespace yasync {
 
-bool RangeGenerator::done() const { return c >= e-1; }
-std::variant<AFuture, movonly<int>> RangeGenerator::resume([[maybe_unused]] const Yengine* eng){
-	c++;
-	return c;
-}
-
 Future<void> asyncSleep(Yengine* engine, unsigned ms){
 	std::shared_ptr<OutsideFuture<void>> f(new OutsideFuture<void>());
 	Daemons::launch([engine, ms](std::shared_ptr<OutsideFuture<void>> f){
