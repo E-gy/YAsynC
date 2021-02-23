@@ -20,6 +20,8 @@ template<typename S, typename E> class result {
 		bool isErr() const { return res.index() == 1; }
 		const S* ok() const { return std::get_if<S>(&res); }
 		const E* err() const { return std::get_if<E>(&res); }
+		S* ok(){ return std::get_if<S>(&res); }
+		E* err(){ return std::get_if<E>(&res); }
 		std::optional<S> okOpt() const { if(auto r = std::get_if<S>(&res)) return *r; else return std::nullopt; }
 		std::optional<E> errOpt() const { if(auto r = std::get_if<E>(&res)) return *r; else return std::nullopt; }
 		operator bool() const { return isOk(); }
@@ -52,6 +54,8 @@ template<typename T> class result<T, T> {
 		bool isErr() const { return !okay; }
 		const T* ok() const { return isOk() ? &thing : nullptr; }
 		const T* err() const { return isErr() ? &thing : nullptr; }
+		T* ok(){ return isOk() ? &thing : nullptr; }
+		T* err(){ return isErr() ? &thing : nullptr; }
 		std::optional<T> okOpt() const { if(isOk()) return thing; else return std::nullopt; }
 		std::optional<T> errOpt() const { if(isErr()) return thing; else return std::nullopt; }
 		operator bool() const { return isOk(); }
@@ -82,6 +86,7 @@ template<typename S> class result<S, void> {
 		bool isOk() const { return okay.has_value(); }
 		bool isErr() const { return !okay.has_value(); }
 		const S* ok() const { return okay.has_value() ? okay.operator->() : nullptr; }
+		S* ok(){ return okay.has_value() ? okay.operator->() : nullptr; }
 		std::optional<S> okOpt() const { return okay; }
 		template<typename U, typename F> result<U, void> mapOk_(F f) const { if(auto r = ok()) return result<U, void>::Ok(f(*r)); else return result<U, void>::Err(); }
 		template<typename V, typename F> result<S, V> mapError_(F f) const { if(isErr()) return result<S, V>::Err(f()); else return result<S, V>::Ok(*ok()); }
@@ -109,6 +114,7 @@ template<typename E> class result<void, E> {
 		bool isOk() const { return !error.has_value(); }
 		bool isErr() const { return error.has_value(); }
 		const E* err() const { return error.has_value() ? error.operator->() : nullptr; }
+		E* err(){ return error.has_value() ? error.operator->() : nullptr; }
 		std::optional<E> errOpt() const { return error; }
 		template<typename U, typename F> result<U, E> mapOk_(F f) const { if(isOk()) return result<U, E>::Ok(f()); else return result<U, E>::Err(*err()); }
 		template<typename V, typename F> result<void, V> mapError_(F f) const { if(auto r = err()) return result<void, V>::Err(f(*r)); else return result<void, V>::Ok(); }
