@@ -66,7 +66,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 class AHandledStrayIOSocket : public IHandledResource {
 	public:
 		inline SocketHandle sock() const { return SocketHandle(rh); }
-		AHandledStrayIOSocket(SocketHandle sock) : IHandledResource(ResourceHandle(sock)){}
+		AHandledStrayIOSocket(SocketHandle sock, bool iopor = false) : IHandledResource(ResourceHandle(sock), iopor){}
 		~AHandledStrayIOSocket(){
 			#ifdef _WIN32
 			if(sock() != INVALID_SOCKET){
