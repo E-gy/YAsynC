@@ -4,6 +4,10 @@
 
 namespace yasync {
 
+#ifdef _DEBUG
+bool IFuture::isExternal(){ return true; }
+#endif
+
 std::ostream& operator<<(std::ostream& os, const FutureState& state){
 	switch(state){
 		case FutureState::Suspended: return os << "Suspended";

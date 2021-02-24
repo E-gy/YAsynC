@@ -22,6 +22,9 @@ class IFuture {
 		 */
 		virtual FutureState state() = 0;
 		TraceCapture trace;
+		#ifdef _DEBUG
+		virtual bool isExternal();
+		#endif
 };
 
 // template<typename T> using movonly = std::unique_ptr<T>;

@@ -11,6 +11,10 @@
 #include "future.hpp"
 #include "threadsafequeue.hpp"
 
+#ifdef _DEBUG
+#include <iostream>
+#endif
+
 namespace yasync {
 
 template<typename T> class FutureG : public IFutureT<T> {
@@ -27,6 +31,9 @@ template<typename T> class FutureG : public IFutureT<T> {
 			set(state);
 			val = std::move(v);
 		}
+		#ifdef _DEBUG
+		bool isExternal() override { return false; }
+		#endif
 };
 
 /**
@@ -265,6 +272,13 @@ class Yengine {
 			//cont:
 			while(true)
 			{
+			#ifdef _DEBUG
+			if(task->isExternal()){
+				std::cerr << "!CRITICAL! external task got inside work loop\n" << task->trace;
+				std::cerr << "skipping...\n";
+				return;
+			}
+			#endif
 			auto gent = (FutureG<void*>*) task.get();
 			gent->set(FutureState::Running);
 			auto g = gent->gen->resume(this);
