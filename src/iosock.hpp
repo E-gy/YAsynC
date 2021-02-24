@@ -304,8 +304,13 @@ class ConnectingSocket : public IResource {
 			if(inf.status) redy->r = ConnectionResultSock::Ok(std::move(sock));
 			else redy->r = retSysNetError<ConnectionResultSock>("ConnectEx async failed", inf.lerr);
 			#else
-			if(inf == EPOLLOUT) redy->r = ConnectionResultSock::Ok(std::move(sock));
-			else redy->r = retSysNetError<ConnectionResultSock>("connect async failed");
+			if((inf & EPOLLERR) != 0){
+				int serr = 0;
+				::socklen_t serrlen = sizeof(serr);
+				if(::getsockopt(sock->rh, SOL_SOCKET, SO_ERROR, reinterpret_cast<void*>(&serr), &serrlen) < 0) redy->r = retSysNetError<ConnectionResultSock>("connect async failed, and trying to understand why failed too");
+				else redy->r = retSysNetError<ConnectionResultSock>("connect async failed", serr);
+			} else if((inf & EPOLLOUT) != 0) redy->r = ConnectionResultSock::Ok(std::move(sock));
+			else redy->r = retSysNetError<ConnectionResultSock>("connect async scramble skedable");
 			#endif
 			engine->engine->notify(std::static_pointer_cast<IFutureT<ConnectionResultSock>>(redy));
 		}
