@@ -243,7 +243,7 @@ template<> Future<IAIOResource::WriteResult> IAIOResource::write<std::vector<cha
 template<> Future<IAIOResource::WriteResult> IAIOResource::write<std::vector<char>>(std::vector<char>&& dataRange);
 
 using IORWriter = std::shared_ptr<IAIOResource::Writer>;
-template<typename Data> auto operator<<(IORWriter wr, Data d){
+template<typename Data> auto operator<<(const IORWriter& wr, Data d){
 	*wr << d;
 	return wr;
 }
