@@ -181,11 +181,11 @@ class IAIOResource : public IResource {
 				 * The writer can still be used after the flush.
 				 */
 				Future<WriteResult> flush();
-				template<typename DataIt> auto write(DataIt dataBegin, DataIt dataEnd){
+				template<typename DataIt> auto write(const DataIt& dataBegin, const DataIt& dataEnd){
 					buffer.insert(buffer.end(), dataBegin, dataEnd);
 					return this;
 				}
-				template<typename DataRange> auto write(DataRange range){
+				template<typename DataRange> auto write(const DataRange& range){
 					return write(range.begin(), range.end());
 				}
 				template<typename Data> auto operator<<(Data d){
