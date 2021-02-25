@@ -320,14 +320,17 @@ class ConnectingSocket : public IResource {
 		}
 };
 
-template<int SDomain, int SType, int SProto, typename AddressInfo> result<Future<ConnectionResult>, std::string> netConnectTo(IOYengine* engine, const NetworkedAddressInfo* addri, [[maybe_unused]] AddressInfo winIniBindTo){
+template<int SDomain, int SType, int SProto, typename AddressInfo> result<Future<ConnectionResult>, std::string> netConnectTo(IOYengine* engine, const NetworkedAddressInfo* addri){
 	using Result = result<Future<ConnectionResult>, std::string>;
 	SocketHandle sock;
 	HandledStrayIOSocket hsock; 
 	#ifdef _WIN32
 	sock = ::WSASocket(SDomain, SType, SProto, NULL, 0, WSA_FLAG_OVERLAPPED);
 	if(sock == INVALID_SOCKET) return retSysError<Result>("WSA socket construction failed");
-	if(::bind(sock, reinterpret_cast<const sockaddr*>(&winIniBindTo), sizeof(AddressInfo)) < 0) return retSysError<Result>("WSA bind failed");
+	AddressInfo winIniBindTo = {};
+	auto bind0 = reinterpret_cast<::sockaddr*>(&winIniBindTo);
+	bind0->sa_family = SDomain;
+	if(::bind(sock, bind0, sizeof(AddressInfo)) < 0) return retSysError<Result>("WSA bind failed");
 	#else
 	sock = ::socket(SDomain, SType, SProto);
 	if(sock < 0) return retSysError<Result>("socket construction failed");
