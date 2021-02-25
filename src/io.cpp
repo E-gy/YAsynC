@@ -208,7 +208,11 @@ class FileResource : public IAIOResource {
 						}
 					}
 				}
-				if(auto e = epollRearm(false).err()) return ReadResult::Err(*e);
+				if(auto e = epollRearm(false).err()){
+					std::cout << "epoll rearm failed for " << engif.get() << "\n";
+					done = true;
+					return ReadResult::Err(*e);
+				}
 				#endif
 				return engif;
 			}, std::vector<char>()));
@@ -282,7 +286,11 @@ class FileResource : public IAIOResource {
 						}
 					}
 				}
-				if(auto e = epollRearm(true).err()) return WriteResult::Err(*e);
+				if(auto e = epollRearm(true).err()){
+					std::cout << "epoll rearm failed for " << engif.get() << "\n";
+					done = true;
+					return WriteResult::Err(*e);
+				}
 				#endif
 				return engif;
 			}, data));
