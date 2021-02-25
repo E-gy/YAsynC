@@ -55,6 +55,7 @@ class SystemNetworkingStateControl {
 		#ifdef _WIN32
 		struct mswsock {
 			LPFN_CONNECTEX ConnectEx;
+			LPFN_ACCEPTEX AcceptEx;
 		};
 		static mswsock MSWSA;
 		#endif
@@ -240,7 +241,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 						lconn.reset(new AHandledStrayIOSocket(nconn));
 					}
 					DWORD reclen;
-					if(::AcceptEx(sock, lconn->sock(), &linterloc, 0, sizeof(linterloc.local), sizeof(linterloc.remote), &reclen, overlapped())){
+					if(SystemNetworkingStateControl::MSWSA.AcceptEx(sock, lconn->sock(), &linterloc, 0, sizeof(linterloc.local), sizeof(linterloc.remote), &reclen, overlapped())){
 						if(::setsockopt(lconn->sock(), SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, reinterpret_cast<char*>(&sock), sizeof(sock)) == SOCKET_ERROR){
 							if(erracc(self, ::WSAGetLastError(), "Set accepting socket accept failed")) return stahp();
 						} else acceptor(linterloc.remote.addr, engine->taek(HandledResource(std::move(lconn))));

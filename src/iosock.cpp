@@ -40,6 +40,8 @@ SystemNetworkingStateControl::SystemNetworkingStateControl(){
 	GUID guid;
 	guid = WSAID_CONNECTEX;
 	WSAIoctl(dummy, SIO_GET_EXTENSION_FUNCTION_POINTER, &guid, sizeof(guid), &MSWSA.ConnectEx, sizeof(MSWSA.ConnectEx), &dummi, NULL, NULL);
+	guid = WSAID_ACCEPTEX;
+	WSAIoctl(dummy, SIO_GET_EXTENSION_FUNCTION_POINTER, &guid, sizeof(guid), &MSWSA.AcceptEx, sizeof(MSWSA.AcceptEx), &dummi, NULL, NULL);
 	closesocket(dummy);
 	std::cout << "WSA Started successfully\n";
 }
