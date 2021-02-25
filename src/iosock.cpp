@@ -1,5 +1,7 @@
 #include "iosock.hpp"
 
+#include <iostream>
+
 namespace yasync::io {
 
 NetworkedAddressInfo::NetworkedAddressInfo(::addrinfo* ads) : addresses(ads) {}
@@ -28,16 +30,22 @@ NetworkedAddressInfo::FindResult NetworkedAddressInfo::find(const std::string& a
 SystemNetworkingStateControl::mswsock SystemNetworkingStateControl::MSWSA = {};
 SystemNetworkingStateControl::SystemNetworkingStateControl(){
 	WSADATA Wsa = {};
-	WSAStartup(MAKEWORD(2,2), &Wsa);
+	auto wserr = WSAStartup(MAKEWORD(2,2), &Wsa);
+	if(wserr){
+		std::cerr << printSysNetError("WSA Startup failed: ", wserr);
+		std::terminate();
+	}
 	SocketHandle dummy = socket(AF_INET, SOCK_STREAM, 0);
 	DWORD dummi;
 	GUID guid;
 	guid = WSAID_CONNECTEX;
 	WSAIoctl(dummy, SIO_GET_EXTENSION_FUNCTION_POINTER, &guid, sizeof(guid), &MSWSA.ConnectEx, sizeof(MSWSA.ConnectEx), &dummi, NULL, NULL);
 	closesocket(dummy);
+	std::cout << "WSA Started successfully\n";
 }
 SystemNetworkingStateControl::~SystemNetworkingStateControl(){
 	WSACleanup();
+	std::cout << "WSA Shut down successfully\n";
 }
 #else
 SystemNetworkingStateControl::SystemNetworkingStateControl(){}
