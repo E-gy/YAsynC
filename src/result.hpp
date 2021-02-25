@@ -35,6 +35,8 @@ template<typename S, typename E> class result {
 			using V = std::decay_t<decltype(f(*std::get_if<E>(&res)))>;
 			return mapError_<V, F>(f);
 		}
+		template<typename FS, typename FE> auto ifElse(FS fs, FE fe) const { return isOk() ? fs(*ok()) : fe(*err()); }
+		template<typename FS, typename FE> auto ifElse(FS fs, FE fe){ return isOk() ? fs(std::move(*ok())) : fe(std::move(*err())); }
 	public:
 		static result Ok(const S& ok){ return result(ok); }
 		static result Err(const E& err){ return result(err); }
@@ -69,6 +71,8 @@ template<typename T> class result<T, T> {
 			using V = std::decay_t<decltype(f(thing))>;
 			return mapError_<V, F>(f);
 		}
+		template<typename FS, typename FE> auto ifElse(FS fs, FE fe) const { return isOk() ? fs(thing) : fe(thing); }
+		template<typename FS, typename FE> auto ifElse(FS fs, FE fe){ return isOk() ? fs(std::move(thing)) : fe(std::move(thing)); }
 	public:
 		static result Ok(const T& ok){ return result(true, ok); }
 		static result Err(const T& err){ return result(false, err); }
@@ -98,6 +102,8 @@ template<typename S> class result<S, void> {
 			using V = std::decay_t<decltype(f())>;
 			return mapError_<V, F>(f);
 		}
+		template<typename FS, typename FE> auto ifElse(FS fs, FE fe) const { return isOk() ? fs(*ok()) : fe(); }
+		template<typename FS, typename FE> auto ifElse(FS fs, FE fe){ return isOk() ? fs(std::move(*ok())) : fe(); }
 	public:
 		static result Ok(const S& ok){ return result(ok); }
 		static result Ok(S && ok){ return result(std::forward<S>(ok)); }
@@ -126,6 +132,8 @@ template<typename E> class result<void, E> {
 			using V = std::decay_t<decltype(f(*err))>;
 			return mapError_<V, F>(f);
 		}
+		template<typename FS, typename FE> auto ifElse(FS fs, FE fe) const { return isOk() ? fs() : fe(*err()); }
+		template<typename FS, typename FE> auto ifElse(FS fs, FE fe){ return isOk() ? fs() : fe(std::move(*err())); }
 	public:
 		static result Ok(){ return result(); }
 		static result Err(const E& err){ return result(err); }
@@ -151,6 +159,7 @@ template<> class result<void, void> {
 			using V = std::decay_t<decltype(f())>;
 			return mapError_<V, F>(f);
 		}
+		template<typename FS, typename FE> auto ifElse(FS fs, FE fe) const { return isOk() ? fs() : fe(); }
 	public:
 		static result Ok(){ return result(true); }
 		static result Err(){ return result(false); }
