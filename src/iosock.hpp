@@ -31,6 +31,14 @@ class NetworkedAddressInfo {
 		~NetworkedAddressInfo();
 		using FindResult = result<NetworkedAddressInfo, std::string>;
 		static FindResult find(const std::string& address, const std::string& port, const ::addrinfo& hints);
+		template<int SDomain, int SType, int SProto> static inline ::addrinfo hint(){
+			::addrinfo hints = {};
+			hints.ai_family = SDomain;
+			hints.ai_socktype = SType;
+			hints.ai_protocol = SProto;
+			return hints;
+		}
+		template<int SDomain, int SType, int SProto> static FindResult find(const std::string& address, const std::string& port){ return find(address, port, hint<SDomain, SType, SProto>()); }
 };
 
 #ifdef _WIN32
