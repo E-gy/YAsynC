@@ -137,6 +137,13 @@ template<typename U, typename F> auto operator>>(Future<U> f, F map){
 	return then(f, map);
 }
 
+/**
+ * Future ❤ Result
+ */
+template<typename FS, typename FE> inline auto operator|(FS fs, FE fe){
+	return [=](auto r){ return r.ifElse(fs, fe); };
+}
+
 template<typename V, typename F, typename... State> class GeneratorLGenerator : public IGeneratorT<V> {
 	bool d = false;
 	std::tuple<State...> state;
