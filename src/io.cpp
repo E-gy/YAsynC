@@ -126,7 +126,6 @@ class FileResource : public IAIOResource {
 		FileResource(FileResource&& mov) = delete;
 		~FileResource(){}
 		Future<ReadResult> _read(size_t bytes){
-			engif->s = FutureState::Running;
 			//self.get() == this   exists to memory-lock dangling IO resource to this lambda generator
 			return defer(lambdagen([this, self = slf.lock(), bytes]([[maybe_unused]] const Yengine* engine, bool& done, std::vector<char>& data) -> std::variant<AFuture, movonly<ReadResult>> {
 				if(done) return ReadResult::Ok(data);
@@ -218,7 +217,6 @@ class FileResource : public IAIOResource {
 			}, std::vector<char>()));
 		}
 		Future<WriteResult> _write(std::vector<char>&& data){
-			engif->s = FutureState::Running;
 			return defer(lambdagen([this, self = slf.lock()]([[maybe_unused]] const Yengine* engine, bool& done, std::vector<char>& data) -> std::variant<AFuture, movonly<WriteResult>> {
 				if(data.empty()) done = true;
 				if(done) return WriteResult::Ok();
