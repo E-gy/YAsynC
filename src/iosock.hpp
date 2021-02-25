@@ -174,6 +174,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 			#ifdef _WIN32
 			// if(::listen(sock, 200) == SOCKET_ERROR) return retSysNetError<ListenResult>("WSA listen failed");
 			if(!CreateIoCompletionPort(reinterpret_cast<HANDLE>(sock), engine->ioPo->rh, COMPLETION_KEY_IO, 0)) return retSysError<ListenResult>("ioCP add failed");
+			if(!::SetFileCompletionNotificationModes(reinterpret_cast<HANDLE>(sock), FILE_SKIP_COMPLETION_PORT_ON_SUCCESS)) return retSysError<ListenResult>("ioCP set notification mode failed");
 			#else
 			// return retSysNetError<ListenResult>("listen failed");
 			{
@@ -334,6 +335,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo> result<Future
 	auto csock = std::shared_ptr<ConnectingSocket>(new ConnectingSocket(engine, std::move(hsock)));
 	#ifdef _WIN32
 	if(!::CreateIoCompletionPort(reinterpret_cast<HANDLE>(sock), engine->ioPo->rh, COMPLETION_KEY_IO, 0)) return retSysError<Result>("ioCP add failed");
+	if(!::SetFileCompletionNotificationModes(reinterpret_cast<HANDLE>(sock), FILE_SKIP_COMPLETION_PORT_ON_SUCCESS)) return retSysError<Result>("ioCP set notification mode failed");
 	#else
 	int fsf = ::fcntl(sock, F_GETFL, 0);
 	if(fsf < 0) return retSysError<Result>("socket get flags failed");

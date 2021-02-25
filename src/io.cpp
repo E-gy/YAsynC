@@ -116,8 +116,9 @@ class FileResource : public IAIOResource {
 		FileResource(IOYengine* e, HandledResource hr) : IAIOResource(e), res(std::move(hr)), buffer(), engif(new OutsideFuture<IOCompletionInfo>()) {
 			#ifdef _WIN32
 			if(!res->iopor){
-				CreateIoCompletionPort(res->rh, e->ioPo->rh, COMPLETION_KEY_IO, 0);
+				::CreateIoCompletionPort(res->rh, e->ioPo->rh, COMPLETION_KEY_IO, 0);
 				res->iopor = true;
+				::SetFileCompletionNotificationModes(res->rh, FILE_SKIP_COMPLETION_PORT_ON_SUCCESS);
 			}
 			#else
 			#endif
