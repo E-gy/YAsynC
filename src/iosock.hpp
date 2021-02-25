@@ -282,6 +282,8 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 	#else
 	sock = ::socket(SDomain, SType, SProto);
 	if(sock < 0) return retSysError<result<LSock, std::string>>("socket construction failed");
+	int reua = 1;
+	if(::setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<void*>(&reua), sizeof(reua)) < 0) return retSysError<result<LSock, std::string>>("socket set reuse address failed");
 	int fsf = fcntl(sock, F_GETFL, 0);
 	if(fsf < 0) return retSysError<result<LSock, std::string>>("socket get flags failed"); 
 	if(fcntl(sock, F_SETFL, fsf|O_NONBLOCK) < 0) return retSysError<result<LSock, std::string>>("socket set non-blocking failed");
