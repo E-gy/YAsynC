@@ -125,6 +125,7 @@ class IAIOResource : public IResource {
 		template<typename PatIt> Future<ReadResult> read_(const PatIt& patBegin, const PatIt& patEnd);
 		/**
 		 * Reads until reaching the pattern. Pattern is included in and is the last sequence of the result.
+		 * If the EOF is reached and pattern not met, errors appropriately.
 		 */
 		template<typename T, typename PatIt> Future<result<T, std::string>> read(const PatIt& patBegin, const PatIt& patEnd){
 			return read_<PatIt>(patBegin, patEnd) >> mapVecToT<T>();
@@ -221,6 +222,10 @@ template<typename PatIt> Future<IAIOResource::ReadResult> IAIOResource::read_(co
 					return IAIOResource::ReadResult::Err(*err);
 				}
 				auto rd = *res->ok();
+				if(rd.empty()){
+					done = true;
+					return IAIOResource::ReadResult::Err("Reached EOF and didn't meet pattern!");
+				}
 				MoveAppend(rd, readbuff);
 			} else return gmd;
 		}
