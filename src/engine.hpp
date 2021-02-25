@@ -274,8 +274,8 @@ class Yengine {
 			{
 			#ifdef _DEBUG
 			if(task->isExternal()){
-				std::cerr << "!CRITICAL! external task got inside work loop\n" << task->trace;
-				std::cerr << "skipping...\n";
+				std::cout << "!CRITICAL! external task got inside work loop " << task.get() << "\n" << task->trace;
+				std::cout << "skipping...\n";
 				return;
 			}
 			#endif
