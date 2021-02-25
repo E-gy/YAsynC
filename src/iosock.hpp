@@ -188,7 +188,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 			// return retSysNetError<ListenResult>("listen failed");
 			{
 				::epoll_event epm;
-				epm.events = EPOLLIN|EPOLLONESHOT;
+				epm.events = EPOLLIN+EPOLLONESHOT;
 				epm.data.ptr = this;
 				if(::epoll_ctl(engine->ioPo->rh, EPOLL_CTL_ADD, sock, &epm) < 0) return retSysError<ListenResult>("epoll add failed");
 			}
@@ -266,7 +266,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 				#else
 				{
 					::epoll_event epm;
-					epm.events = EPOLLIN|EPOLLONESHOT;
+					epm.events = EPOLLIN+EPOLLONESHOT;
 					epm.data.ptr = this;
 					if(::epoll_ctl(engine->ioPo->rh, EPOLL_CTL_MOD, sock, &epm) < 0) if(erracc(self, errno, "EPoll rearm failed")) return stahp();
 				}
@@ -354,7 +354,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo> result<Future
 	if(::fcntl(sock, F_SETFL, fsf|O_NONBLOCK) < 0) return retSysError<Result>("socket set non-blocking failed");
 	{
 		::epoll_event epm;
-		epm.events = EPOLLOUT|EPOLLONESHOT;
+		epm.events = EPOLLOUT+EPOLLONESHOT;
 		epm.data.ptr = csock.get();
 		if(::epoll_ctl(engine->ioPo->rh, EPOLL_CTL_ADD, sock, &epm) < 0) return retSysError<Result>("epoll add failed");
 	}
