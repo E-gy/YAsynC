@@ -53,7 +53,57 @@ template<typename T> Future<T> completed(const T& t){
 	vf->s = FutureState::Completed;
 	vf->r = t;
 	return vf;
-} 
+}
+
+template<typename T> class AggregateFuture : public IFutureT<std::vector<T>> {
+	unsigned bal = 0;
+	std::mutex synch;
+	std::vector<T> results;
+	public:
+		std::weak_ptr<AggregateFuture> slf;
+		AggregateFuture() = default;
+		FutureState state(){ return bal > 0 ? FutureState::Running : FutureState::Completed; }
+		movonly<std::vector<T>> result(){ return std::move(results); }
+		AggregateFuture& add(Yengine* engine, Future<T> f){
+			{
+				std::unique_lock lok(synch);
+				bal++;
+			}
+			engine <<= f >> [self = slf.lock(), engine](T t){
+				std::unique_lock lok(self->synch);
+				self->results.add(std::move(t));
+				if(--self->bal == 0) engine->notify(self);
+			};
+			return *this;
+		}
+};
+
+template<> class AggregateFuture<void> : public IFutureT<void> {
+	unsigned bal = 0;
+	std::mutex synch;
+	public:
+		std::weak_ptr<AggregateFuture> slf;
+		AggregateFuture() = default;
+		FutureState state(){ return bal > 0 ? FutureState::Running : FutureState::Completed; }
+		movonly<void> result(){ return movonly<void>(); }
+		AggregateFuture& add(Yengine* engine, Future<void> f){
+			{
+				std::unique_lock lok(synch);
+				bal++;
+			}
+			engine <<= f >> [self = slf.lock(), engine](){
+				std::unique_lock lok(self->synch);
+				if(--self->bal == 0) engine->notify(std::static_pointer_cast<IFutureT<void>>(self));
+			};
+			return *this;
+		}
+};
+
+template<typename T> std::shared_ptr<AggregateFuture<T>> aggregAll(){
+	std::shared_ptr<AggregateFuture<T>> f(new AggregateFuture<T>());
+	f->slf = f;
+	return f;
+}
 
 template<typename T> Future<T> asyncSleep(Yengine* engine, unsigned ms, T ret){
 	std::shared_ptr<OutsideFuture<T>> f(new OutsideFuture<T>());
