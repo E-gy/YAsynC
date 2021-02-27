@@ -47,7 +47,7 @@ IOYengine::IOYengine(Yengine* e) : engine(e),
 	cfdStopSend = SharedResource(new StandardHandledResource(pipe2[1]));
 	cfdStopReceive = SharedResource(new StandardHandledResource(pipe2[0]));
 	::epoll_event epm;
-	epm.events = EPOLLHUP + EPOLLERR + EPOLLONESHOT;
+	epm.events = EPOLLHUP | EPOLLERR | EPOLLONESHOT;
 	epm.data.ptr = this;
 	if(::epoll_ctl(ioPo->rh, EPOLL_CTL_ADD, cfdStopReceive->rh, &epm)) throw std::runtime_error("Initalizing close down pipe epoll failed");
 	Daemons::launch([this](){ iothreadwork(); });
@@ -66,7 +66,7 @@ IOYengine::~IOYengine(){
 	return !rearm && CreateIoCompletionPort(r, ioPo->rh, COMPLETION_KEY_IO, 0) ? result<void, int>(GetLastError()) : result<void, int>();
 	#else
 	::epoll_event epm;
-	epm.events = EPOLLOUT + EPOLLIN EPOLLONESHOT;
+	epm.events = EPOLLOUT | EPOLLIN EPOLLONESHOT;
 	epm.data.ptr = this;
 	#endif
 }*/
@@ -89,7 +89,7 @@ class FileResource : public IAIOResource {
 	EPollRegResult lazyEpollReg(bool wr){
 		if(res->iopor) return false;
 		::epoll_event epm;
-		epm.events = (wr ? EPOLLOUT : EPOLLIN) + EPOLLONESHOT;
+		epm.events = (wr ? EPOLLOUT : EPOLLIN) | EPOLLONESHOT;
 		epm.data.ptr = this;
 		if(::epoll_ctl(engine->ioPo->rh, EPOLL_CTL_ADD, res->rh, &epm)){
 			if(errno == EPERM){
@@ -106,7 +106,7 @@ class FileResource : public IAIOResource {
 	EPollRearmResult epollRearm(bool wr){
 		if(!res->iopor) return EPollRearmResult::Ok();
 		::epoll_event epm;
-		epm.events = (wr ? EPOLLOUT : EPOLLIN) + EPOLLONESHOT;
+		epm.events = (wr ? EPOLLOUT : EPOLLIN) | EPOLLONESHOT;
 		epm.data.ptr = this;
 		return ::epoll_ctl(engine->ioPo->rh, EPOLL_CTL_MOD, res->rh, &epm) ? retSysError<EPollRearmResult>("Register to epoll failed") : EPollRearmResult::Ok();
 	}
