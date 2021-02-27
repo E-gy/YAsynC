@@ -37,6 +37,8 @@ template<typename S, typename E> class result {
 		}
 		template<typename FS, typename FE> auto ifElse(FS fs, FE fe) const { return isOk() ? fs(*ok()) : fe(*err()); }
 		template<typename FS, typename FE> auto ifElse(FS fs, FE fe){ return isOk() ? fs(std::move(*ok())) : fe(std::move(*err())); }
+		template<typename F> auto operator>>(F f) const { return f(*this); }
+		template<typename F> auto operator>>(F f){ return f(std::move(*this)); }
 	public:
 		static result Ok(const S& ok){ return result(ok); }
 		static result Err(const E& err){ return result(err); }
@@ -73,6 +75,8 @@ template<typename T> class result<T, T> {
 		}
 		template<typename FS, typename FE> auto ifElse(FS fs, FE fe) const { return isOk() ? fs(thing) : fe(thing); }
 		template<typename FS, typename FE> auto ifElse(FS fs, FE fe){ return isOk() ? fs(std::move(thing)) : fe(std::move(thing)); }
+		template<typename F> auto operator>>(F f) const { return f(*this); }
+		template<typename F> auto operator>>(F f){ return f(std::move(*this)); }
 	public:
 		static result Ok(const T& ok){ return result(true, ok); }
 		static result Err(const T& err){ return result(false, err); }
@@ -104,6 +108,8 @@ template<typename S> class result<S, void> {
 		}
 		template<typename FS, typename FE> auto ifElse(FS fs, FE fe) const { return isOk() ? fs(*ok()) : fe(); }
 		template<typename FS, typename FE> auto ifElse(FS fs, FE fe){ return isOk() ? fs(std::move(*ok())) : fe(); }
+		template<typename F> auto operator>>(F f) const { return f(*this); }
+		template<typename F> auto operator>>(F f){ return f(std::move(*this)); }
 	public:
 		static result Ok(const S& ok){ return result(ok); }
 		static result Ok(S && ok){ return result(std::forward<S>(ok)); }
@@ -134,6 +140,8 @@ template<typename E> class result<void, E> {
 		}
 		template<typename FS, typename FE> auto ifElse(FS fs, FE fe) const { return isOk() ? fs() : fe(*err()); }
 		template<typename FS, typename FE> auto ifElse(FS fs, FE fe){ return isOk() ? fs() : fe(std::move(*err())); }
+		template<typename F> auto operator>>(F f) const { return f(*this); }
+		template<typename F> auto operator>>(F f){ return f(std::move(*this)); }
 	public:
 		static result Ok(){ return result(); }
 		static result Err(const E& err){ return result(err); }
@@ -164,3 +172,14 @@ template<> class result<void, void> {
 		static result Ok(){ return result(true); }
 		static result Err(){ return result(false); }
 };
+
+/**
+ * Future ❤ Result
+ */
+namespace magikop {
+
+template<typename FS, typename FE> inline auto operator|(FS fs, FE fe){
+	return [=](auto r){ return r.ifElse(fs, fe); };
+}
+
+}
