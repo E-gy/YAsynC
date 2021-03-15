@@ -15,6 +15,7 @@ std::ostream& operator<<(std::ostream& os, const FutureState& state){
 		case FutureState::Running: return os << "Running";
 		case FutureState::Awaiting: return os << "Awaiting";
 		case FutureState::Completed: return os << "Completed";
+		case FutureState::Cancelled: return os << "Cancelled";
 		default: return os << "<Invalid State>";
 	}
 }
