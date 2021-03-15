@@ -143,6 +143,10 @@ class FileResource : public IAIOResource {
 							return retSysError<ReadResult>("Async Read failure", result.lerr);
 						}
 					} else {
+						if(result.transferred == 0){ //EOF on ECONNRESET
+							done = true;
+							return ReadResult::Ok(data);
+						}
 						data.insert(data.end(), buffer.begin(), buffer.begin()+result.transferred);
 						overlapped()->Offset += result.transferred;
 						if(bytes > 0 && (done = data.size() >= bytes)){
