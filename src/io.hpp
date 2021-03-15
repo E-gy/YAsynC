@@ -88,6 +88,7 @@ class IAIOResource : public IResource {
 		IAIOResource(IOYengine* e) : engine(e){}
 		std::weak_ptr<IAIOResource> slf;
 		auto setSelf(std::shared_ptr<IAIOResource> self){ return slf = self; }
+	public:
 		using ReadResult = result<std::vector<char>, std::string>;
 		/**
 		 * Reads _at least_ the number of bytes requested, or until EOD is reached.
