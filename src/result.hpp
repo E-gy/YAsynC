@@ -25,8 +25,8 @@ template<typename S, typename E> class result {
 		E* err(){ return std::get_if<E>(&res); }
 		std::optional<S> okOpt() const { if(auto r = std::get_if<S>(&res)) return *r; else return std::nullopt; }
 		std::optional<E> errOpt() const { if(auto r = std::get_if<E>(&res)) return *r; else return std::nullopt; }
-		S unwrapOk() const { if(auto r = std::get_if<S>(&res)) return *r; else throw std::runtime_error("Expected result to be Ok, was Err"); }
-		E unwrapErr() const { if(auto r = std::get_if<E>(&res)) return *r; else throw std::runtime_error("Expected result to be Err, was Ok"); }
+		S unwrapOk() const { if(auto r = std::get_if<S>(&res)) return *r; else throw std::logic_error("Expected result to be Ok, was Err"); }
+		E unwrapErr() const { if(auto r = std::get_if<E>(&res)) return *r; else throw std::logic_error("Expected result to be Err, was Ok"); }
 		operator bool() const { return isOk(); }
 		template<typename U, typename F> result<U, E> mapOk_(F f) const { if(auto r = std::get_if<S>(&res)) return result<U, E>::Ok(f(*r)); else return result<U, E>::Err(*err()); }
 		template<typename V, typename F> result<S, V> mapError_(F f) const { if(auto r = std::get_if<E>(&res)) return result<S, V>::Err(f(*r)); else return result<S, V>::Ok(*ok()); }
@@ -65,8 +65,8 @@ template<typename T> class result<T, T> {
 		T* err(){ return isErr() ? &thing : nullptr; }
 		std::optional<T> okOpt() const { if(isOk()) return thing; else return std::nullopt; }
 		std::optional<T> errOpt() const { if(isErr()) return thing; else return std::nullopt; }
-		T unwrapOk() const { if(isOk()) return thing; else throw std::runtime_error("Expected result to be Ok, was Err"); }
-		T unwrapErr() const { if(isErr()) return thing; else throw std::runtime_error("Expected result to be Err, was Ok"); }
+		T unwrapOk() const { if(isOk()) return thing; else throw std::logic_error("Expected result to be Ok, was Err"); }
+		T unwrapErr() const { if(isErr()) return thing; else throw std::logic_error("Expected result to be Err, was Ok"); }
 		operator bool() const { return isOk(); }
 		template<typename U, typename F> result<U, T> mapOk_(F f) const { if(isOk()) return result<U, T>::Ok(f(thing)); else return result<U, T>::Err(*err()); }
 		template<typename V, typename F> result<T, V> mapError_(F f) const { if(isErr()) return result<T, V>::Err(f(thing)); else return result<T, V>::Ok(*ok()); }
@@ -100,7 +100,7 @@ template<typename S> class result<S, void> {
 		bool isErr() const { return !okay.has_value(); }
 		const S* ok() const { return okay.has_value() ? okay.operator->() : nullptr; }
 		S* ok(){ return okay.has_value() ? okay.operator->() : nullptr; }
-		S unwrapOk() const { if(isOk()) return *okay; else throw std::runtime_error("Expected result to be Ok, was Err"); }
+		S unwrapOk() const { if(isOk()) return *okay; else throw std::logic_error("Expected result to be Ok, was Err"); }
 		std::optional<S> okOpt() const { return okay; }
 		template<typename U, typename F> result<U, void> mapOk_(F f) const { if(auto r = ok()) return result<U, void>::Ok(f(*r)); else return result<U, void>::Err(); }
 		template<typename V, typename F> result<S, V> mapError_(F f) const { if(isErr()) return result<S, V>::Err(f()); else return result<S, V>::Ok(*ok()); }
@@ -133,7 +133,7 @@ template<typename E> class result<void, E> {
 		bool isErr() const { return error.has_value(); }
 		const E* err() const { return error.has_value() ? error.operator->() : nullptr; }
 		E* err(){ return error.has_value() ? error.operator->() : nullptr; }
-		E unwrapErr() const { if(isErr()) return *error; else throw std::runtime_error("Expected result to be Err, was Ok"); }
+		E unwrapErr() const { if(isErr()) return *error; else throw std::logic_error("Expected result to be Err, was Ok"); }
 		std::optional<E> errOpt() const { return error; }
 		template<typename U, typename F> result<U, E> mapOk_(F f) const { if(isOk()) return result<U, E>::Ok(f()); else return result<U, E>::Err(*err()); }
 		template<typename V, typename F> result<void, V> mapError_(F f) const { if(auto r = err()) return result<void, V>::Err(f(*r)); else return result<void, V>::Ok(); }
