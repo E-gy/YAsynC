@@ -84,7 +84,7 @@ class FileResource : public IAIOResource {
 	void notify(IOCompletionInfo inf){
 		engif->r = inf;
 		engif->s = FutureState::Completed;
-		engine->notify<IOCompletionInfo>(engif);
+		engine->notify(engif);
 	}
 	#ifdef _WIN32
 	#else
@@ -348,7 +348,7 @@ IAIOResource::Writer::~Writer(){
 	resource->engine <<= flush() >> [res = resource, naut = eodnot](auto wr){
 		naut->r = wr;
 		naut->s = FutureState::Completed;
-		res->engine->notify<IAIOResource::WriteResult>(naut);
+		res->engine->notify(naut);
 	};
 }
 Future<IAIOResource::WriteResult> IAIOResource::Writer::eod() const { return eodnot; }

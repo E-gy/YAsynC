@@ -107,7 +107,7 @@ template<> class AggregateFuture<void> : public IFutureT<void> {
 			}
 			engine <<= f >> [self = slf.lock(), engine](){
 				std::unique_lock lok(self->synch);
-				if(--self->bal == 0) engine->notify<void>(self);
+				if(--self->bal == 0) engine->notify(self);
 			};
 			return *this;
 		}
@@ -125,7 +125,7 @@ template<typename T> Future<T> asyncSleep(Yengine* engine, unsigned ms, T ret){
 		std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 		f->s = FutureState::Completed;
 		f->r = std::move(rt);
-		engine->notify<T>(f);
+		engine->notify(f);
 	}, f, movonly<T>(new T(ret)));
 	return f;
 }

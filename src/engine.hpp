@@ -234,9 +234,7 @@ class Yengine {
 		 * !!!USE CANCELLATION WITH CARE!!!
 		 * On cancellation the entire awaited chain is yeeted into oblivion.
 		 */
-		template<typename T> void notify(Future<T> f){
-			work.push(f);
-		}
+		void notify(AFuture f);
 		/**
 		 * Notifies the engine of cancellation of an external future.
 		 * !!!USE CANCELLATION WITH CARE!!!

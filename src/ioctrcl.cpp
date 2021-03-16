@@ -81,7 +81,7 @@ class CtrlC_ {
 					#endif
 					if(stahp) break;
 					n->s = FutureState::Completed;
-					engine->notify<void>(n);
+					engine->notify(n);
 				}
 				#ifdef _WIN32
 				ResourceHandle c = INVALID_HANDLE_VALUE;

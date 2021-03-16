@@ -7,7 +7,7 @@ Future<void> asyncSleep(Yengine* engine, unsigned ms){
 	Daemons::launch([engine, ms](std::shared_ptr<OutsideFuture<void>> f){
 		std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 		f->s = FutureState::Completed;
-		engine->notify<void>(f);
+		engine->notify(f);
 	}, f);
 	return f;
 }

@@ -27,6 +27,8 @@ Yengine::Yengine(unsigned threads) : workers(threads) {
 	for(unsigned i = 0; i < workers; i++) Daemons::launch([this](){ this->threadwork(); });
 }
 
+void Yengine::notify(AFuture f){ work.push(f); }
+
 void Yengine::wle(){
 	{
 		std::unique_lock lock(notificationsLock);
