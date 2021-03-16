@@ -282,7 +282,7 @@ class Yengine {
 				return;
 			}
 			#endif
-			auto gent = (IFutureG<void*>*) task.get();
+			auto gent = reinterpret_cast<IFutureG<void*>*>(task.get());
 			gent->set(FutureState::Running);
 			auto g = gent->gen->resume(this);
 			if(auto awa = std::get_if<AFuture>(&g)){
