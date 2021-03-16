@@ -17,15 +17,17 @@
 
 namespace yasync {
 
-template<typename T> class FutureG : public IFutureT<T> {
+class IFutureGa {};
+
+template<typename T> class IFutureG : public IFutureT<T>, public IFutureGa {
 	protected:
 		FutureState s = FutureState::Suspended;
 		movonly<T> val;
 	public:
 		const Generator<T> gen;
-		FutureG(Generator<T> g) : gen(g) {}
-		FutureState state(){ return s; }
-		movonly<T> result(){ return std::move(val); }
+		IFutureG(Generator<T> g) : gen(g) {}
+		FutureState state() override { return s; }
+		movonly<T> result() override { return std::move(val); }
 		void set(FutureState state){ s = state; }
 		void set(FutureState state, movonly<T> && v){
 			set(state);
@@ -36,13 +38,16 @@ template<typename T> class FutureG : public IFutureT<T> {
 		#endif
 };
 
+using FutureGa = std::shared_ptr<IFutureGa>;
+template<typename T> using FutureG = std::shared_ptr<IFutureG<T>>;
+
 /**
  * Transforms a generator into a future
  * @param gen the generator
  * @returns future
  */ 
-template<typename T> Future<T> defer(Generator<T> gen){
-	return Future<T>(new FutureG<T>(gen));
+template<typename T> FutureG<T> defer(Generator<T> gen){
+	return std::make_shared<IFutureG<T>>(gen);
 }
 
 template<typename V, typename U, typename F> class ChainingGenerator : public IGeneratorT<V> {
@@ -110,10 +115,10 @@ template<typename V, typename U, typename F> class ChainingWrappingGenerator : p
 };
 
 template <typename T> struct _typed{};
-template <typename V, typename U, typename F> Future<V> then_spec(Future<U> f, F map, _typed<V>){
+template <typename V, typename U, typename F> FutureG<V> then_spec(Future<U> f, F map, _typed<V>){
 	return defer(Generator<V>(new ChainingGenerator<V, U, F>(f, map)));
 }
-template <typename V, typename U, typename F> Future<V> then_spec(Future<U> f, F map, _typed<Future<V>>){
+template <typename V, typename U, typename F> FutureG<V> then_spec(Future<U> f, F map, _typed<Future<V>>){
 	return defer(Generator<V>(new ChainingWrappingGenerator<V, U, F>(f, map)));
 }
 
@@ -136,6 +141,7 @@ template<typename U, typename F> auto then(Future<U> f, F map){
 template<typename U, typename F> auto operator>>(Future<U> f, F map){
 	return then(f, map);
 }
+template<typename U, typename F> auto operator>>(FutureG<U> f, F map){ return then(std::static_pointer_cast<IFutureT<U>>(f), map); }
 
 template<typename V, typename F, typename... State> class GeneratorLGenerator : public IGeneratorT<V> {
 	bool d = false;
@@ -187,7 +193,7 @@ template<typename F, typename S> auto lambdagen(F f, S arg){
 /**
  * @see then but with manual type parametrization
  */
-template<typename V, typename U, typename F> Future<V> them(Future<U> f, F map){
+template<typename V, typename U, typename F> FutureG<V> them(Future<U> f, F map){
 	using t_rt = std::decay_t<decltype(map(*(f->result())))>;
 	if constexpr (std::is_convertible<t_rt, AFuture>::value) return defer(Generator<V>(new ChainingWrappingGenerator<V, U, F>(f, map)));
 	else return defer(Generator<V>(new ChainingGenerator<V, U, F>(f, map)));
@@ -195,7 +201,7 @@ template<typename V, typename U, typename F> Future<V> them(Future<U> f, F map){
 
 class Yengine {
 	/**
-	 * Queue<FutureG<?>>
+	 * Queue<IFutureG<?>>
 	 */
 	ThreadSafeQueue<AFuture> work;
 	/**
@@ -211,13 +217,12 @@ class Yengine {
 		 * @param f future to execute
 		 * @returns f
 		 */ 
-		template<typename T> Future<T> execute(Future<T> f){
-			auto ft = std::static_pointer_cast<FutureG<T>>(f);
-			ft->set(FutureState::Queued);
+		template<typename T> FutureG<T> execute(FutureG<T> f){
+			f->set(FutureState::Queued);
 			work.push(f);
 			return f;
 		}
-		template<typename T> auto operator<<=(Future<T> f){
+		template<typename T> auto operator<<=(FutureG<T> f){
 			return execute(f);
 		}
 		/**
@@ -225,7 +230,7 @@ class Yengine {
 		 * @param gen the generator
 		 * @returns future
 		 */ 
-		template<typename T> Future<T> launch(Generator<T> gen){
+		template<typename T> FutureG<T> launch(Generator<T> gen){
 			return execute(defer(gen));
 		}
 		/**
@@ -277,7 +282,7 @@ class Yengine {
 				return;
 			}
 			#endif
-			auto gent = (FutureG<void*>*) task.get();
+			auto gent = (IFutureG<void*>*) task.get();
 			gent->set(FutureState::Running);
 			auto g = gent->gen->resume(this);
 			if(auto awa = std::get_if<AFuture>(&g)){
@@ -312,6 +317,6 @@ class Yengine {
 		}
 };
 
-template<typename T> auto operator<<=(Yengine* const engine, Future<T> f){ return engine->execute(f); }
+template<typename T> auto operator<<=(Yengine* const engine, FutureG<T> f){ return engine->execute(f); }
 
 }
