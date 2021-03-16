@@ -77,6 +77,7 @@ IHandledResource::IHandledResource(ResourceHandle r, bool b) : rh(r), iopor(b) {
 IHandledResource::~IHandledResource(){}
 
 class FileResource : public IAIOResource {
+	IOYengine* ioengine;
 	HandledResource res;
 	std::array<char, DEFAULT_BUFFER_SIZE> buffer;
 	std::shared_ptr<OutsideFuture<IOCompletionInfo>> engif;
@@ -93,7 +94,7 @@ class FileResource : public IAIOResource {
 		::epoll_event epm;
 		epm.events = (wr ? EPOLLOUT : EPOLLIN) | EPOLLONESHOT;
 		epm.data.ptr = this;
-		if(::epoll_ctl(engine->ioPo->rh, EPOLL_CTL_ADD, res->rh, &epm)){
+		if(::epoll_ctl(ioengine->ioPo->rh, EPOLL_CTL_ADD, res->rh, &epm)){
 			if(errno == EPERM){
 				//The file does not support non-blocking io :(
 				//That means that all r/w will succeed (and block). So we report ourselves ready for IO, and off to EOD we go!
@@ -110,12 +111,12 @@ class FileResource : public IAIOResource {
 		::epoll_event epm;
 		epm.events = (wr ? EPOLLOUT : EPOLLIN) | EPOLLONESHOT;
 		epm.data.ptr = this;
-		return ::epoll_ctl(engine->ioPo->rh, EPOLL_CTL_MOD, res->rh, &epm) ? retSysError<EPollRearmResult>("Register to epoll failed") : EPollRearmResult::Ok();
+		return ::epoll_ctl(ioengine->ioPo->rh, EPOLL_CTL_MOD, res->rh, &epm) ? retSysError<EPollRearmResult>("Register to epoll failed") : EPollRearmResult::Ok();
 	}
 	#endif
 	public:
 		friend class IOYengine;
-		FileResource(IOYengine* e, HandledResource hr) : IAIOResource(e->engine), res(std::move(hr)), buffer(), engif(new OutsideFuture<IOCompletionInfo>()) {
+		FileResource(IOYengine* e, HandledResource hr) : IAIOResource(e->engine), ioengine(e), res(std::move(hr)), buffer(), engif(new OutsideFuture<IOCompletionInfo>()) {
 			#ifdef _WIN32
 			if(!res->iopor){
 				::CreateIoCompletionPort(res->rh, e->ioPo->rh, COMPLETION_KEY_IO, 0);
