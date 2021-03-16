@@ -21,6 +21,10 @@ class IFuture {
 		 * @returns current state of the future
 		 */
 		virtual FutureState state() = 0;
+		/**
+		 * Called by the engine when [right before] the future is queued
+		 */
+		virtual void onQueued(){};
 		TraceCapture trace;
 		#ifdef _DEBUG
 		virtual bool isExternal();

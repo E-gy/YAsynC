@@ -28,6 +28,7 @@ template<typename T> class IFutureG : public IFutureT<T>, public IFutureGa {
 		IFutureG(Generator<T> g) : gen(g) {}
 		FutureState state() override { return s; }
 		movonly<T> result() override { return std::move(val); }
+		void onQueued() override { s = FutureState::Queued; }
 		void set(FutureState state){ s = state; }
 		void set(FutureState state, movonly<T> && v){
 			set(state);
@@ -218,7 +219,7 @@ class Yengine {
 		 * @returns f
 		 */ 
 		template<typename T> FutureG<T> execute(FutureG<T> f){
-			f->set(FutureState::Queued);
+			f->onQueued();
 			work.push(f);
 			return f;
 		}
