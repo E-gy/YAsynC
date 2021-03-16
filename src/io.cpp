@@ -373,7 +373,7 @@ void IOYengine::iothreadwork(std::shared_ptr<bool> eterm){
 	#else
 	auto cfdStopReceive = this->cfdStopReceive;
 	#endif
-	while(*eterm){
+	while(!*eterm){
 		#ifdef _WIN32
 		IOCompletionInfo inf;
 		ULONG_PTR key;
