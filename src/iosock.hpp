@@ -379,7 +379,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo> result<Future
 			break; //async connect, cross your fingers it succeeds. otherwise, and if there're remaining candidates, we're in deep quack
 	}
 	if(!candidate) return Result::Err("Exhausted address space");
-	return std::static_pointer_cast<IFutureT<ConnectionResult>>(std::static_pointer_cast<IFutureT<ConnectionResultSock>>(csock->redy) >> [engine, csock](ConnectionResultSock res){ //we need to grab `csock` so it lives until outside handover lul
+	return std::static_pointer_cast<IFutureT<ConnectionResultSock>>(csock->redy) >> [engine, csock](ConnectionResultSock res){ //we need to grab `csock` so it lives until outside handover lul
 		if(auto ok = res.ok()){
 			#ifdef _WIN32
 			if(::setsockopt((*ok)->sock(), SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT, NULL, 0)) return retSysNetError<ConnectionResult>("update context connect failed");
@@ -387,7 +387,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo> result<Future
 			return ConnectionResult::Ok(engine->taek(HandledResource(ok->release())));
 		}
 		return ConnectionResult::Err(*res.err());
-	});
+	};
 }
 
 }
