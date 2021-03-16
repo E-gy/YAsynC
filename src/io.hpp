@@ -270,7 +270,8 @@ class IOYengine {
 		IOResource taek(HandledResource r);
 	private:
 		friend class IResource;
-		void iothreadwork();
+		std::shared_ptr<bool> eterm;
+		void iothreadwork(std::shared_ptr<bool>);
 		#ifdef _WIN32
 		static constexpr unsigned ioThreads = 1; //IO events are dispatched by notification to the engine
 		#else

@@ -37,9 +37,10 @@ IOYengine::IOYengine(Yengine* e) : engine(e),
 	#else
 	ioPo(new StandardHandledResource(::epoll_create1(EPOLL_CLOEXEC)))
 	#endif
+	, eterm(new bool(false))
 {
 	#ifdef _WIN32
-	for(unsigned i = 0; i < ioThreads; i++) Daemons::launch([this](){ iothreadwork(); });
+	for(unsigned i = 0; i < ioThreads; i++) Daemons::launch([this](){ iothreadwork(eterm); });
 	#else
 	if(ioPo->rh < 0) throw std::runtime_error("Initalizing EPoll failed");
 	fd_t pipe2[2];
@@ -50,11 +51,12 @@ IOYengine::IOYengine(Yengine* e) : engine(e),
 	epm.events = EPOLLHUP | EPOLLERR | EPOLLONESHOT;
 	epm.data.ptr = this;
 	if(::epoll_ctl(ioPo->rh, EPOLL_CTL_ADD, cfdStopReceive->rh, &epm)) throw std::runtime_error("Initalizing close down pipe epoll failed");
-	Daemons::launch([this](){ iothreadwork(); });
+	Daemons::launch([this, eterm = this->eterm](){ iothreadwork(eterm); });
 	#endif
 }
 
 IOYengine::~IOYengine(){
+	*eterm = true;
 	#ifdef _WIN32
 	for(unsigned i = 0; i < ioThreads; i++) PostQueuedCompletionStatus(ioPo->rh, 0, COMPLETION_KEY_SHUTDOWN, NULL);
 	#else
@@ -363,12 +365,14 @@ IORWriter IAIOResource::writer(){
 }
 
 
-void IOYengine::iothreadwork(){
+void IOYengine::iothreadwork(std::shared_ptr<bool> eterm){
+	if(*eterm) return;
 	auto ioPo = this->ioPo;
-	#ifndef _WIN32
+	#ifdef _WIN32
+	#else
 	auto cfdStopReceive = this->cfdStopReceive;
 	#endif
-	while(true){
+	while(*eterm){
 		#ifdef _WIN32
 		IOCompletionInfo inf;
 		ULONG_PTR key;
