@@ -212,7 +212,7 @@ class Yengine {
 		 * @returns f
 		 */ 
 		template<typename T> Future<T> execute(Future<T> f){
-			auto ft = std::dynamic_pointer_cast<FutureG<T>>(f);
+			auto ft = std::static_pointer_cast<FutureG<T>>(f);
 			ft->set(FutureState::Queued);
 			work.push(f);
 			return f;

@@ -123,7 +123,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 		void notify(ListenEvent e){
 			engif->r = e;
 			engif->s = FutureState::Completed;
-			engine->engine->notify(std::dynamic_pointer_cast<IFutureT<ListenEvent>>(engif));
+			engine->engine->notify<ListenEvent>(engif);
 		}
 		void notify(ListenEventType e){ notify(ListenEvent{e, 0}); }
 		#ifdef _WIN32
@@ -324,7 +324,7 @@ class ConnectingSocket : public IResource {
 			} else if((inf & EPOLLOUT) != 0) redy->r = ConnectionResultSock::Ok(std::move(sock));
 			else redy->r = retSysNetError<ConnectionResultSock>("connect async scramble skedable");
 			#endif
-			engine->engine->notify(std::static_pointer_cast<IFutureT<ConnectionResultSock>>(redy));
+			engine->engine->notify<ConnectionResultSock>(redy);
 		}
 };
 

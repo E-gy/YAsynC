@@ -81,7 +81,7 @@ class CtrlC_ {
 					#endif
 					if(stahp) break;
 					n->s = FutureState::Completed;
-					engine->notify(std::static_pointer_cast<IFutureT<void>>(n));
+					engine->notify<void>(n);
 				}
 				#ifdef _WIN32
 				ResourceHandle c = INVALID_HANDLE_VALUE;
@@ -113,7 +113,7 @@ class CtrlC_ {
 			if(!notif.expired()){
 				auto t = notif.lock();
 				t->s = FutureState::Cancelled;
-				engine->cancelled(std::static_pointer_cast<IFutureT<void>>(t));
+				engine->cancelled<void>(t);
 			}
 		}
 };
