@@ -21,7 +21,6 @@ class IOI2Way {
 	template<unsigned R, unsigned W> class IOI : public IAIOResource {
 		friend class IOI2Way;
 		std::shared_ptr<IOI2Way> share;
-		std::weak_ptr<IOI> slf;
 		std::weak_ptr<IOI<W, R>> oe;
 		IOI(IOYengine* e, std::shared_ptr<IOI2Way> p) : IAIOResource(e), share(p) {
 			share->notivia[R] = e;
@@ -66,10 +65,11 @@ class IOI2Way {
 	public:
 		static std::pair<IOResource, IOResource> newt(IOYengine* e1, IOYengine* e2){
 			auto p = std::shared_ptr<IOI2Way>(new IOI2Way());
-			return std::pair<IOResource, IOResource>{
-				std::shared_ptr<IOI<0, 1>>(new IOI<0, 1>(e1, p)),
-				std::shared_ptr<IOI<1, 0>>(new IOI<1, 0>(e2, p)),
-			};
+			auto i1 = std::shared_ptr<IOI<0, 1>>(new IOI<0, 1>(e1, p));
+			auto i2 = std::shared_ptr<IOI<1, 0>>(new IOI<1, 0>(e2, p));
+			i1->setSelf(i1);
+			i2->setSelf(i2);
+			return std::pair<IOResource, IOResource>{i1,i2};
 		}
 };
 
