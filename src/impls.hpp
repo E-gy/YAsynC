@@ -48,10 +48,24 @@ template<typename T> class OutsideFuture : public IFutureT<T> {
 		movonly<T> result(){ return std::move(r); }
 };
 
+template<> class OutsideFuture<void> : public IFutureT<void> {
+	public:
+		OutsideFuture(){}
+		FutureState s = FutureState::Running;
+		FutureState state(){ return s; }
+		movonly<void> result(){ return movonly<void>(); }
+};
+
 template<typename T> Future<T> completed(const T& t){
 	std::shared_ptr<OutsideFuture<T>> vf(new OutsideFuture<T>());
 	vf->s = FutureState::Completed;
 	vf->r = t;
+	return vf;
+}
+
+inline Future<void> completed(){
+	auto vf = std::make_shared<OutsideFuture<void>>();
+	vf->s = FutureState::Completed;
 	return vf;
 }
 
