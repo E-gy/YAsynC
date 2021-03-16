@@ -83,7 +83,7 @@ class FileResource : public IAIOResource {
 	void notify(IOCompletionInfo inf){
 		engif->r = inf;
 		engif->s = FutureState::Completed;
-		engine->engine->notify(std::dynamic_pointer_cast<IFutureT<IOCompletionInfo>>(engif));
+		engine->notify(std::dynamic_pointer_cast<IFutureT<IOCompletionInfo>>(engif));
 	}
 	#ifdef _WIN32
 	#else
@@ -115,7 +115,7 @@ class FileResource : public IAIOResource {
 	#endif
 	public:
 		friend class IOYengine;
-		FileResource(IOYengine* e, HandledResource hr) : IAIOResource(e), res(std::move(hr)), buffer(), engif(new OutsideFuture<IOCompletionInfo>()) {
+		FileResource(IOYengine* e, HandledResource hr) : IAIOResource(e->engine), res(std::move(hr)), buffer(), engif(new OutsideFuture<IOCompletionInfo>()) {
 			#ifdef _WIN32
 			if(!res->iopor){
 				::CreateIoCompletionPort(res->rh, e->ioPo->rh, COMPLETION_KEY_IO, 0);
@@ -344,10 +344,10 @@ template<> Future<IAIOResource::WriteResult> IAIOResource::write<std::vector<cha
 
 IAIOResource::Writer::Writer(IOResource r) : resource(r), eodnot(new OutsideFuture<IAIOResource::WriteResult>()), lflush(completed(IAIOResource::WriteResult())) {}
 IAIOResource::Writer::~Writer(){
-	resource->engine->engine <<= flush() >> [res = resource, naut = eodnot](auto wr){
+	resource->engine <<= flush() >> [res = resource, naut = eodnot](auto wr){
 		naut->r = wr;
 		naut->s = FutureState::Completed;
-		res->engine->engine->notify(std::dynamic_pointer_cast<IFutureT<IAIOResource::WriteResult>>(naut));
+		res->engine->notify(std::dynamic_pointer_cast<IFutureT<IAIOResource::WriteResult>>(naut));
 	};
 }
 Future<IAIOResource::WriteResult> IAIOResource::Writer::eod() const { return eodnot; }

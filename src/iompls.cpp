@@ -10,19 +10,19 @@ class IOI2Way {
 	std::mutex locks[2];
 	bool exi[2] = {false, false};
 	std::optional<std::shared_ptr<OutsideFuture<void>>> notifi[2];
-	IOYengine* notivia[2] = {nullptr, nullptr};
+	Yengine* notivia[2] = {nullptr, nullptr};
 	template<unsigned W> void notify(){
 		if(notifi[W]){
 			auto n = *notifi[W];
 			n->s = FutureState::Completed;
-			notivia[W]->engine->notify<void>(n);
+			notivia[W]->notify<void>(n);
 		}
 	}
 	template<unsigned R, unsigned W> class IOI : public IAIOResource {
 		friend class IOI2Way;
 		std::shared_ptr<IOI2Way> share;
 		std::weak_ptr<IOI<W, R>> oe;
-		IOI(IOYengine* e, std::shared_ptr<IOI2Way> p) : IAIOResource(e), share(p) {
+		IOI(Yengine* e, std::shared_ptr<IOI2Way> p) : IAIOResource(e), share(p) {
 			share->notivia[R] = e;
 			share->exi[W] = true;
 		}
@@ -63,7 +63,7 @@ class IOI2Way {
 			}
 	};
 	public:
-		static std::pair<IOResource, IOResource> newt(IOYengine* e1, IOYengine* e2){
+		static std::pair<IOResource, IOResource> newt(Yengine* e1, Yengine* e2){
 			auto p = std::shared_ptr<IOI2Way>(new IOI2Way());
 			auto i1 = std::shared_ptr<IOI<0, 1>>(new IOI<0, 1>(e1, p));
 			auto i2 = std::shared_ptr<IOI<1, 0>>(new IOI<1, 0>(e2, p));
@@ -73,7 +73,7 @@ class IOI2Way {
 		}
 };
 
-std::pair<IOResource, IOResource> ioi2Way(IOYengine* e1, IOYengine* e2){
+std::pair<IOResource, IOResource> ioi2Way(Yengine* e1, Yengine* e2){
 	return IOI2Way::newt(e1, e2);
 }
 

@@ -85,7 +85,7 @@ template<typename T> auto mapVecToT(){
 
 class IAIOResource : public IResource {
 	protected:
-		IAIOResource(IOYengine* e) : engine(e){}
+		IAIOResource(Yengine* e) : engine(e){}
 		std::weak_ptr<IAIOResource> slf;
 		auto setSelf(std::shared_ptr<IAIOResource> self){ return slf = self; }
 	public:
@@ -109,7 +109,7 @@ class IAIOResource : public IResource {
 	private:
 		std::vector<char> readbuff;
 	public:
-		IOYengine* const engine;
+		Yengine* const engine;
 		//L1
 		/**
 		 * Reads until EOD.
