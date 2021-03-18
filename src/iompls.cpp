@@ -39,9 +39,9 @@ class IOI2Way {
 					share->notivia[R] = nullptr;
 				}
 			}
-			void notify([[maybe_unused]] IOCompletionInfo _) override {}
+			void notify(IOCompletionInfo) override {}
 			Future<ReadResult> _read(size_t bytes = 0) override {
-				return defer(lambdagen([this, self = slf.lock(), bytes]([[maybe_unused]] const Yengine* _eng, bool& done, std::vector<char> data) -> std::variant<AFuture, movonly<ReadResult>> {
+				return defer(lambdagen([this, self = slf.lock(), bytes](const Yengine*, bool& done, std::vector<char> data) -> std::variant<AFuture, movonly<ReadResult>> {
 					if(done) return ReadResult::Ok(data);
 					share->notifi[R] = std::nullopt;
 					std::unique_lock lk(share->locks[R]);

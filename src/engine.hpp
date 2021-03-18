@@ -58,7 +58,7 @@ template<typename V, typename U, typename F> class ChainingGenerator : public IG
 	public:
 		ChainingGenerator(Future<U> awa, F map) : w(awa), f(map) {}
 		bool done() const { return reqd && w->state() == FutureState::Completed; }
-		std::variant<AFuture, movonly<V>> resume([[maybe_unused]] const Yengine* engine){
+		std::variant<AFuture, movonly<V>> resume(const Yengine*){
 			if(w->state() == FutureState::Completed || !(reqd = !reqd)){
 				if constexpr (std::is_same<V, void>::value){
 					if constexpr (std::is_same<U, void>::value) f();
@@ -81,7 +81,7 @@ template<typename V, typename U, typename F> class ChainingWrappingGenerator : p
 	public:
 		ChainingWrappingGenerator(Future<U> w, F f) : awa(w), gf(f) {}
 		bool done() const { return state == State::Fi; }
-		std::variant<AFuture, movonly<V>> resume([[maybe_unused]] const Yengine* engine){
+		std::variant<AFuture, movonly<V>> resume(const Yengine*){
 			switch(state){
 				case State::I:
 					state = State::A0;

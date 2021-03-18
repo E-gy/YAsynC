@@ -193,7 +193,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 				if(::epoll_ctl(engine->ioPo->rh, EPOLL_CTL_ADD, sock, &epm) < 0) return retSysError<ListenResult>("epoll add failed");
 			}
 			#endif
-			return engine->engine->launch(lambdagen([this, self = slf.lock()]([[maybe_unused]] const Yengine* _engine, bool& done, [[maybe_unused]] int _un) -> std::variant<AFuture, movonly<void>>{
+			return engine->engine->launch(lambdagen([this, self = slf.lock()](const Yengine*, bool& done, int) -> std::variant<AFuture, movonly<void>>{
 				if(done) return movonly<void>();
 				auto stahp = [&](){
 					done = true;

@@ -58,7 +58,7 @@ std::ostream& operator<<(std::ostream& os, const TraceCapture& trace){
 #else
 
 void TraceCapture::setup(){}
-TraceCapture::TraceCapture([[maybe_unused]] unsigned upto){}
-std::ostream& operator<<(std::ostream& os, [[maybe_unused]] const TraceCapture& trace){ return os << "{missing-trace}\n"; }
+TraceCapture::TraceCapture(unsigned){}
+std::ostream& operator<<(std::ostream& os, const TraceCapture&){ return os << "{missing-trace}\n"; }
 
 #endif
