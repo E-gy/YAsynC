@@ -279,6 +279,7 @@ class IOYengine {
 				Ticket& operator=(Ticket &&);
 				Ticket(const Ticket&) = delete;
 				Ticket& operator=(const Ticket&) = delete;
+				inline IOYengine* operator->() const { return engine; }
 		};
 		/**
 		 * Acquires an IO ticket.
