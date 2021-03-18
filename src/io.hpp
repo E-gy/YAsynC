@@ -290,7 +290,7 @@ class IOYengine {
 		friend class IResource;
 		std::condition_variable condWIOE;
 		std::mutex ticketsLock;
-		unsigned tickets;
+		unsigned tickets = 0;
 		void iothreadwork();
 		#ifdef _WIN32
 		static constexpr unsigned ioThreads = 1; //IO events are dispatched by notification to the engine
