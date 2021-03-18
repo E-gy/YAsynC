@@ -57,8 +57,8 @@ template<typename V, typename U, typename F> class ChainingGenerator : public IG
 	F f;
 	public:
 		ChainingGenerator(Future<U> awa, F map) : w(awa), f(map) {}
-		bool done() const { return reqd && w->state() == FutureState::Completed; }
-		std::variant<AFuture, movonly<V>> resume(const Yengine*){
+		bool done() const override { return reqd && w->state() == FutureState::Completed; }
+		std::variant<AFuture, movonly<V>> resume(const Yengine*) override {
 			if(w->state() == FutureState::Completed || !(reqd = !reqd)){
 				if constexpr (std::is_same<V, void>::value){
 					if constexpr (std::is_same<U, void>::value) f();
@@ -80,8 +80,8 @@ template<typename V, typename U, typename F> class ChainingWrappingGenerator : p
 	F gf;
 	public:
 		ChainingWrappingGenerator(Future<U> w, F f) : awa(w), gf(f) {}
-		bool done() const { return state == State::Fi; }
-		std::variant<AFuture, movonly<V>> resume(const Yengine*){
+		bool done() const override { return state == State::Fi; }
+		std::variant<AFuture, movonly<V>> resume(const Yengine*) override {
 			switch(state){
 				case State::I:
 					state = State::A0;
@@ -149,8 +149,8 @@ template<typename V, typename F, typename... State> class GeneratorLGenerator : 
 	F g;
 	public:
 		GeneratorLGenerator(std::tuple<State...> s, F gen) : state(s), g(gen){}
-		bool done() const { return d; }
-		std::variant<AFuture, movonly<V>> resume(const Yengine* engine){
+		bool done() const override { return d; }
+		std::variant<AFuture, movonly<V>> resume(const Yengine* engine) override {
 			return g(engine, d, state);
 		}
 };
@@ -172,8 +172,8 @@ template<typename V, typename F, typename S> class GeneratorLGenerator<V, F, S> 
 	F g;
 	public:
 		GeneratorLGenerator(S s, F gen) : state(s), g(gen){}
-		bool done() const { return d; }
-		std::variant<AFuture, movonly<V>> resume(const Yengine* engine){
+		bool done() const override { return d; }
+		std::variant<AFuture, movonly<V>> resume(const Yengine* engine) override {
 			return g(engine, d, state);
 		}
 };
