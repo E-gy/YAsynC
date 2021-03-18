@@ -110,6 +110,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 			if(sock >= 0) ::close(sock);
 			sock = -1;
 			#endif
+			engine.release();
 		}
 	private:
 		enum class ListenEventType {
@@ -154,9 +155,9 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 		Errs erracc;
 		Acc acceptor;
 	public:
-		IOYengine* const engine;
+		IOYengine::Ticket engine;
 		AddressInfo address;
-		AListeningSocket(IOYengine* e, SocketHandle socket, Errs era, Acc accept) : sock(socket), engif(new OutsideFuture<ListenEvent>()), erracc(era), acceptor(accept), engine(e) {
+		AListeningSocket(IOYengine* e, SocketHandle socket, Errs era, Acc accept) : sock(socket), engif(new OutsideFuture<ListenEvent>()), erracc(era), acceptor(accept), engine(e->ticket()) {
 			#ifdef _WIN32
 			
 			#else
@@ -306,10 +307,10 @@ using ConnectionResult = result<IOResource, std::string>;
 
 class ConnectingSocket : public IResource {
 	public:
-		IOYengine* engine;
+		IOYengine::Ticket engine;
 		HandledStrayIOSocket sock;
 		std::shared_ptr<OutsideFuture<ConnectionResultSock>> redy;
-		ConnectingSocket(IOYengine* e, HandledStrayIOSocket && s) : engine(e), sock(std::move(s)), redy(new OutsideFuture<ConnectionResultSock>()) {}
+		ConnectingSocket(IOYengine* e, HandledStrayIOSocket && s) : engine(e->ticket()), sock(std::move(s)), redy(new OutsideFuture<ConnectionResultSock>()) {}
 		void notify(IOCompletionInfo inf) override {
 			redy->s = FutureState::Completed;
 			#ifdef _WIN32
