@@ -258,7 +258,7 @@ class IOYengine {
 	public:
 		Yengine* const engine;
 		IOYengine(Yengine* e);
-		~IOYengine();
+		void wioe();
 		// result<void, int> iocplReg(ResourceHandle r, bool rearm); as much as we'd love to do that, there simply waay to many differences between IOCompletion and EPoll
 		//so let's make platform specific internals public instead ¯\_(ツ)_/¯
 		SharedResource const ioPo;
@@ -268,10 +268,30 @@ class IOYengine {
 		 * @returns async resource
 		 */
 		IOResource taek(HandledResource r);
+		class Ticket {
+			IOYengine* engine;
+			Ticket();
+			explicit Ticket(IOYengine*);
+			public:
+				friend class IOYengine;
+				~Ticket();
+				Ticket(Ticket &&);
+				Ticket& operator=(Ticket &&);
+				Ticket(const Ticket&) = delete;
+				Ticket& operator=(const Ticket&) = delete;
+		};
+		/**
+		 * Acquires an IO ticket.
+		 * Possession of such a ticket guarantees processing of IO operations and existence of the engine.
+		 * Any component with _strong indirect_ dependency on IO should possess a ticket.
+		 */
+		Ticket ticket();
 	private:
 		friend class IResource;
-		std::shared_ptr<bool> eterm;
-		void iothreadwork(std::shared_ptr<bool>);
+		std::condition_variable condWIOE;
+		std::mutex ticketsLock;
+		unsigned tickets;
+		void iothreadwork();
 		#ifdef _WIN32
 		static constexpr unsigned ioThreads = 1; //IO events are dispatched by notification to the engine
 		#else

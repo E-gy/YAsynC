@@ -31,48 +31,6 @@ class StandardHandledResource : public IHandledResource {
 		}
 };
 
-IOYengine::IOYengine(Yengine* e) : engine(e),
-	#ifdef _WIN32
-	ioPo(new StandardHandledResource(CreateIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, ioThreads)))
-	#else
-	ioPo(new StandardHandledResource(::epoll_create1(EPOLL_CLOEXEC)))
-	#endif
-	, eterm(new bool(false))
-{
-	#ifdef _WIN32
-	for(unsigned i = 0; i < ioThreads; i++) Daemons::launch([this](){ iothreadwork(eterm); });
-	#else
-	if(ioPo->rh < 0) throw std::runtime_error("Initalizing EPoll failed");
-	fd_t pipe2[2];
-	if(::pipe2(pipe2, O_CLOEXEC | O_NONBLOCK)) throw std::runtime_error("Initalizing close down pipe failed");
-	cfdStopSend = SharedResource(new StandardHandledResource(pipe2[1]));
-	cfdStopReceive = SharedResource(new StandardHandledResource(pipe2[0]));
-	::epoll_event epm;
-	epm.events = EPOLLHUP | EPOLLERR | EPOLLONESHOT;
-	epm.data.ptr = this;
-	if(::epoll_ctl(ioPo->rh, EPOLL_CTL_ADD, cfdStopReceive->rh, &epm)) throw std::runtime_error("Initalizing close down pipe epoll failed");
-	Daemons::launch([this, eterm = this->eterm](){ iothreadwork(eterm); });
-	#endif
-}
-
-IOYengine::~IOYengine(){
-	*eterm = true;
-	#ifdef _WIN32
-	for(unsigned i = 0; i < ioThreads; i++) PostQueuedCompletionStatus(ioPo->rh, 0, COMPLETION_KEY_SHUTDOWN, NULL);
-	#else
-	#endif
-}
-
-/*result<void, int> IOYengine::iocplReg(ResourceHandle r, bool rearm){
-	#ifdef _WIN32
-	return !rearm && CreateIoCompletionPort(r, ioPo->rh, COMPLETION_KEY_IO, 0) ? result<void, int>(GetLastError()) : result<void, int>();
-	#else
-	::epoll_event epm;
-	epm.events = EPOLLOUT | EPOLLIN EPOLLONESHOT;
-	epm.data.ptr = this;
-	#endif
-}*/
-
 IHandledResource::IHandledResource(ResourceHandle r, bool b) : rh(r), iopor(b) {}
 IHandledResource::~IHandledResource(){}
 
@@ -366,14 +324,71 @@ IORWriter IAIOResource::writer(){
 }
 
 
-void IOYengine::iothreadwork(std::shared_ptr<bool> eterm){
-	if(*eterm) return;
+// IO Yengine
+
+IOYengine::IOYengine(Yengine* e) : engine(e),
+	#ifdef _WIN32
+	ioPo(new StandardHandledResource(CreateIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, ioThreads)))
+	#else
+	ioPo(new StandardHandledResource(::epoll_create1(EPOLL_CLOEXEC)))
+	#endif
+{
+	#ifdef _WIN32
+	for(unsigned i = 0; i < ioThreads; i++) Daemons::launch([this](){ iothreadwork(); });
+	#else
+	if(ioPo->rh < 0) throw std::runtime_error("Initalizing EPoll failed");
+	fd_t pipe2[2];
+	if(::pipe2(pipe2, O_CLOEXEC | O_NONBLOCK)) throw std::runtime_error("Initalizing close down pipe failed");
+	cfdStopSend = SharedResource(new StandardHandledResource(pipe2[1]));
+	cfdStopReceive = SharedResource(new StandardHandledResource(pipe2[0]));
+	::epoll_event epm;
+	epm.events = EPOLLHUP | EPOLLERR | EPOLLONESHOT;
+	epm.data.ptr = this;
+	if(::epoll_ctl(ioPo->rh, EPOLL_CTL_ADD, cfdStopReceive->rh, &epm)) throw std::runtime_error("Initalizing close down pipe epoll failed");
+	Daemons::launch([this](){ iothreadwork(); });
+	#endif
+}
+
+void IOYengine::wioe(){
+	std::unique_lock lok(ticketsLock);
+	while(tickets > 0) condWIOE.wait(lok);
+	#ifdef _WIN32
+	for(unsigned i = 0; i < ioThreads; i++) PostQueuedCompletionStatus(ioPo->rh, 0, COMPLETION_KEY_SHUTDOWN, NULL);
+	#else
+	cfdStopSend.reset();
+	#endif
+}
+
+
+IOYengine::Ticket::Ticket() : engine(nullptr) {} 
+IOYengine::Ticket::Ticket(IOYengine* e) : engine(e){
+	std::unique_lock lok(e->ticketsLock);
+	e->tickets++;
+}
+IOYengine::Ticket::~Ticket(){
+	if(engine){
+		std::unique_lock lok(engine->ticketsLock);
+		if(--engine->tickets == 0) engine->condWIOE.notify_all();
+	}
+}
+IOYengine::Ticket::Ticket(Ticket && mov){
+	engine = mov.engine;
+	mov.engine = nullptr;
+}
+IOYengine::Ticket& IOYengine::Ticket::operator=(Ticket && mov){
+	std::swap(engine, mov.engine);
+	return *this;
+}
+
+IOYengine::Ticket IOYengine::ticket(){ return Ticket(this); }
+
+void IOYengine::iothreadwork(){
 	auto ioPo = this->ioPo;
 	#ifdef _WIN32
 	#else
 	auto cfdStopReceive = this->cfdStopReceive;
 	#endif
-	while(!*eterm){
+	while(true){
 		#ifdef _WIN32
 		IOCompletionInfo inf;
 		ULONG_PTR key;
@@ -400,6 +415,8 @@ IOResource IOYengine::taek(HandledResource rh){
 	r->setSelf(r);
 	return r;
 }
+
+//FIO
 
 FileOpenResult fileOpenRead(IOYengine* engine, const std::string& path){
 	ResourceHandle file;
