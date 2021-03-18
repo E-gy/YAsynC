@@ -368,9 +368,13 @@ IOYengine::Ticket::Ticket(IOYengine* e) : engine(e){
 	e->tickets++;
 }
 IOYengine::Ticket::~Ticket(){
+	release();
+}
+void IOYengine::Ticket::release(){
 	if(engine){
 		std::unique_lock lok(engine->ticketsLock);
 		if(--engine->tickets == 0) engine->condWIOE.notify_all();
+		engine = nullptr;
 	}
 }
 IOYengine::Ticket::Ticket(Ticket && mov){

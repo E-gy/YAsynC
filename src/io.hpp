@@ -275,6 +275,7 @@ class IOYengine {
 			public:
 				friend class IOYengine;
 				~Ticket();
+				void release();
 				Ticket(Ticket &&);
 				Ticket& operator=(Ticket &&);
 				Ticket(const Ticket&) = delete;
