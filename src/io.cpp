@@ -35,7 +35,7 @@ IHandledResource::IHandledResource(ResourceHandle r, bool b) : rh(r), iopor(b) {
 IHandledResource::~IHandledResource(){}
 
 class FileResource : public IAIOResource {
-	IOYengine* ioengine;
+	IOYengine::Ticket ioengine;
 	HandledResource res;
 	std::array<char, DEFAULT_BUFFER_SIZE> buffer;
 	std::shared_ptr<OutsideFuture<IOCompletionInfo>> engif;
@@ -74,7 +74,7 @@ class FileResource : public IAIOResource {
 	#endif
 	public:
 		friend class IOYengine;
-		FileResource(IOYengine* e, HandledResource hr) : IAIOResource(e->engine), ioengine(e), res(std::move(hr)), buffer(), engif(new OutsideFuture<IOCompletionInfo>()) {
+		FileResource(IOYengine* e, HandledResource hr) : IAIOResource(e->engine), ioengine(e->ticket()), res(std::move(hr)), buffer(), engif(new OutsideFuture<IOCompletionInfo>()) {
 			#ifdef _WIN32
 			if(!res->iopor){
 				::CreateIoCompletionPort(res->rh, e->ioPo->rh, COMPLETION_KEY_IO, 0);
