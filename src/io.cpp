@@ -350,8 +350,10 @@ IOYengine::IOYengine(Yengine* e) : engine(e),
 }
 
 void IOYengine::wioe(){
-	std::unique_lock lok(ticketsLock);
-	while(tickets > 0) condWIOE.wait(lok);
+	{
+		std::unique_lock lok(ticketsLock);
+		while(tickets > 0) condWIOE.wait(lok);
+	}
 	#ifdef _WIN32
 	for(unsigned i = 0; i < ioThreads; i++) PostQueuedCompletionStatus(ioPo->rh, 0, COMPLETION_KEY_SHUTDOWN, NULL);
 	#else
