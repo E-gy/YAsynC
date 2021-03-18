@@ -56,7 +56,7 @@ template<typename V, typename U, typename F> class ChainingGenerator : public IG
 	bool reqd = false;
 	F f;
 	public:
-		ChainingGenerator(Future<U> awa, F map) : w(awa), f(map) {}
+		ChainingGenerator(Future<U> awa, F && map) : w(awa), f(std::move(map)) {}
 		bool done() const override { return reqd && w->state() == FutureState::Completed; }
 		std::variant<AFuture, movonly<V>> resume(const Yengine*) override {
 			if(w->state() == FutureState::Completed || !(reqd = !reqd)){
@@ -79,7 +79,7 @@ template<typename V, typename U, typename F> class ChainingWrappingGenerator : p
 	std::optional<Future<V>> nxt = std::nullopt;
 	F gf;
 	public:
-		ChainingWrappingGenerator(Future<U> w, F f) : awa(w), gf(f) {}
+		ChainingWrappingGenerator(Future<U> w, F && f) : awa(w), gf(std::move(f)) {}
 		bool done() const override { return state == State::Fi; }
 		std::variant<AFuture, movonly<V>> resume(const Yengine*) override {
 			switch(state){
@@ -116,11 +116,11 @@ template<typename V, typename U, typename F> class ChainingWrappingGenerator : p
 };
 
 template <typename T> struct _typed{};
-template <typename V, typename U, typename F> Future<V> then_spec(Future<U> f, F map, _typed<V>){
-	return defer(Generator<V>(new ChainingGenerator<V, U, F>(f, map)));
+template <typename V, typename U, typename F> Future<V> then_spec(Future<U> f, F && map, _typed<V>){
+	return defer(Generator<V>(new ChainingGenerator<V, U, F>(f, std::move(map))));
 }
-template <typename V, typename U, typename F> Future<V> then_spec(Future<U> f, F map, _typed<Future<V>>){
-	return defer(Generator<V>(new ChainingWrappingGenerator<V, U, F>(f, map)));
+template <typename V, typename U, typename F> Future<V> then_spec(Future<U> f, F && map, _typed<Future<V>>){
+	return defer(Generator<V>(new ChainingWrappingGenerator<V, U, F>(f, std::move(map))));
 }
 
 /**
@@ -129,18 +129,18 @@ template <typename V, typename U, typename F> Future<V> then_spec(Future<U> f, F
  * @param map `(ref in: U) -> V|Future<V>` function taking a reference to input type thing and producing output type thing or future
  * @returns @ref
  */
-template<typename U, typename F> auto then(Future<U> f, F map){
+template<typename U, typename F> auto then(Future<U> f, F && map){
 	if constexpr (std::is_same<U, void>::value){
 		using V = std::decay_t<decltype(map())>;
-		return then_spec(f, map, _typed<V>{});
+		return then_spec(f, std::move(map), _typed<V>{});
 	} else {
 		using V = std::decay_t<decltype(map(*f->result()))>;
-		return then_spec(f, map, _typed<V>{});
+		return then_spec(f, std::move(map), _typed<V>{});
 	}
 }
 
-template<typename U, typename F> auto operator>>(Future<U> f, F map){
-	return then(f, map);
+template<typename U, typename F> auto operator>>(Future<U> f, F && map){
+	return then(f, std::move(map));
 }
 
 template<typename V, typename F, typename... State> class GeneratorLGenerator : public IGeneratorT<V> {
@@ -148,22 +148,22 @@ template<typename V, typename F, typename... State> class GeneratorLGenerator : 
 	std::tuple<State...> state;
 	F g;
 	public:
-		GeneratorLGenerator(std::tuple<State...> s, F gen) : state(s), g(gen){}
+		GeneratorLGenerator(std::tuple<State...> s, F && gen) : state(s), g(std::move(gen)){}
 		bool done() const override { return d; }
 		std::variant<AFuture, movonly<V>> resume(const Yengine* engine) override {
 			return g(engine, d, state);
 		}
 };
 
-template<typename V, typename F, typename... State> Generator<V> lambdagen_spec(_typed<std::variant<AFuture, movonly<V>>>, F f, State... args){
-	return Generator<V>(new GeneratorLGenerator<V, F, State...>(std::tuple<State...>(args...), f));
+template<typename V, typename F, typename... State> Generator<V> lambdagen_spec(_typed<std::variant<AFuture, movonly<V>>>, F && f, State... args){
+	return Generator<V>(new GeneratorLGenerator<V, F, State...>(std::tuple<State...>(args...), std::move(f)));
 }
 
-template<typename F, typename... State> auto lambdagen(F f, State... args){
+template<typename F, typename... State> auto lambdagen(F && f, State... args){
 	const Yengine* engine;
 	bool don;
 	using V = std::decay_t<decltype(f(engine, don, std::tuple<State...>()))>;
-	return lambdagen_spec(_typed<V>{}, f, args...);
+	return lambdagen_spec(_typed<V>{}, std::move(f), args...);
 }
 
 template<typename V, typename F, typename S> class GeneratorLGenerator<V, F, S> : public IGeneratorT<V> {
@@ -171,32 +171,32 @@ template<typename V, typename F, typename S> class GeneratorLGenerator<V, F, S> 
 	S state;
 	F g;
 	public:
-		GeneratorLGenerator(S s, F gen) : state(s), g(gen){}
+		GeneratorLGenerator(S s, F && gen) : state(s), g(std::move(gen)){}
 		bool done() const override { return d; }
 		std::variant<AFuture, movonly<V>> resume(const Yengine* engine) override {
 			return g(engine, d, state);
 		}
 };
 
-template<typename V, typename F, typename S> Generator<V> lambdagen_spec(_typed<std::variant<AFuture, movonly<V>>>, F f, S arg){
-	return Generator<V>(new GeneratorLGenerator<V, F, S>(arg, f));
+template<typename V, typename F, typename S> Generator<V> lambdagen_spec(_typed<std::variant<AFuture, movonly<V>>>, F && f, S arg){
+	return Generator<V>(new GeneratorLGenerator<V, F, S>(arg, std::move(f)));
 }
 
-template<typename F, typename S> auto lambdagen(F f, S arg){
+template<typename F, typename S> auto lambdagen(F && f, S arg){
 	const Yengine* engine;
 	bool don;
 	S _arg;
 	using V = std::decay_t<decltype(f(engine, don, _arg))>;
-	return lambdagen_spec(_typed<V>{}, f, arg);
+	return lambdagen_spec(_typed<V>{}, std::move(f), arg);
 }
 
 /**
  * @see then but with manual type parametrization
  */
-template<typename V, typename U, typename F> Future<V> them(Future<U> f, F map){
+template<typename V, typename U, typename F> Future<V> them(Future<U> f, F && map){
 	using t_rt = std::decay_t<decltype(map(*(f->result())))>;
-	if constexpr (std::is_convertible<t_rt, AFuture>::value) return defer(Generator<V>(new ChainingWrappingGenerator<V, U, F>(f, map)));
-	else return defer(Generator<V>(new ChainingGenerator<V, U, F>(f, map)));
+	if constexpr (std::is_convertible<t_rt, AFuture>::value) return defer(Generator<V>(new ChainingWrappingGenerator<V, U, F>(f, std::move(map))));
+	else return defer(Generator<V>(new ChainingGenerator<V, U, F>(f, std::move(map))));
 }
 
 class Yengine {
