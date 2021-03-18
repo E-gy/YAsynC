@@ -251,70 +251,10 @@ class Yengine {
 	private:
 		std::condition_variable condWLE;
 		std::mutex notificationsLock;
-		void notifiAdd(AFuture k, AFuture v){
-			std::unique_lock lock(notificationsLock);
-			notifications[k] = v;
-		}
-		std::optional<AFuture> notifiDrop(AFuture k){
-			std::unique_lock lock(notificationsLock);
-			auto naut = notifications.find(k);
-			if(naut == notifications.end()) return std::nullopt;
-			auto ret = naut->second;
-			notifications.erase(naut);
-			if(notifications.empty()) condWLE.notify_all();
-			return ret;
-		}
-		void threado(AFuture task){ 
-			if(task->state() == FutureState::Cancelled){ //TODO let generators manage cancellations actually. But already it requires fixing a lot of them, so implement default behaviour for now
-				while(auto naut = notifiDrop(task)) task = *naut; //which is nuking the await chain. COOOL
-				return;
-			} if(task->state() == FutureState::Completed){ //completed outside futures (via notify)
-				if(auto naut = notifiDrop(task)) task = *naut; //chained future contains backref to the outside task and will steal the result itself like a good one
-				else return; //nothing to chain outside future with
-			} else if(task->state() > FutureState::Running) return; //Only suspended tasks are resumeable
-			//cont:
-			while(true)
-			{
-			#ifdef _DEBUG
-			if(task->isExternal()){
-				std::cout << "!CRITICAL! external task got inside work loop " << task.get() << "\n" << task->trace;
-				std::cout << "skipping...\n";
-				return;
-			}
-			#endif
-			auto gent = reinterpret_cast<IFutureG<void*>*>(task.get());
-			gent->set(FutureState::Running);
-			auto g = gent->gen->resume(this);
-			if(auto awa = std::get_if<AFuture>(&g)){
-				switch((*awa)->state()){
-					case FutureState::Cancelled:
-					case FutureState::Completed:
-						// goto cont;
-						break;
-					case FutureState::Suspended:
-						gent->set(FutureState::Awaiting);
-						notifiAdd(*awa, task);
-						task = *awa;
-						// goto cont;
-						break;
-					case FutureState::Queued: //This is stoopid, but hey we don't want to sync what we don't need, so it'll wait
-					case FutureState::Awaiting:
-					case FutureState::Running:
-						gent->set(FutureState::Awaiting);
-						notifiAdd(*awa, task);
-						return;
-				}
-			} else {
-				gent->set(gent->gen->done() ? FutureState::Completed : FutureState::Suspended, std::move(std::get<movonly<void*>>(g))); //do NOT!!! copy. C++ compiler reaaally wants to copy. NO!
-				//#BeLazy: Whether we're done or not, drop from notifications. If we're done, well that's it. If we aren't, someone up in the pipeline will await for us at some point, setting up the notifications once again.
-				if(auto naut = notifiDrop(task)) task = *naut; //Proceed up the await chain immediately
-				else return;
-			}
-			}
-		}
-		void threadwork(){
-			while(auto w = work.pop()) threado(*w);
-		}
+		void notifiAdd(AFuture k, AFuture v);
+		std::optional<AFuture> notifiDrop(AFuture k);
+		void threado(AFuture task);
+		void threadwork();
 };
 
 template<typename T> auto operator<<=(Yengine* const engine, Future<T> f){ return engine->execute(f); }
