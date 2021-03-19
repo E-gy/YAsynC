@@ -43,17 +43,17 @@ template<typename T> class OutsideFuture : public IFutureT<T> {
 	public:
 		OutsideFuture(){}
 		FutureState s = FutureState::Running;
-		FutureState state(){ return s; }
+		FutureState state() const override { return s; }
 		movonly<T> r;
-		movonly<T> result(){ return std::move(r); }
+		movonly<T> result() override { return std::move(r); }
 };
 
 template<> class OutsideFuture<void> : public IFutureT<void> {
 	public:
 		OutsideFuture(){}
 		FutureState s = FutureState::Running;
-		FutureState state(){ return s; }
-		movonly<void> result(){ return movonly<void>(); }
+		FutureState state() const override { return s; }
+		movonly<void> result() override { return movonly<void>(); }
 };
 
 template<typename T> Future<T> completed(const T& t){
