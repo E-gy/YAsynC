@@ -131,7 +131,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 		void notify(syserr_t e){ notify(ListenEvent{ListenEventType::Error, e}); }
 		#endif
 		syserr_t lerr;
-		void notify(IOCompletionInfo inf){
+		void notify(IOCompletionInfo inf) override {
 			#ifdef _WIN32
 			if(!inf.status) notify(inf.lerr);
 			else notify(ListenEventType::Accept);
@@ -140,6 +140,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 			else notify(ListenEvent{ListenEventType::Error, errno});
 			#endif
 		}
+		void cancel() override {} //Doesn't make much sense...	Use shutdown to stop listening.
 		#ifdef _WIN32
 		HandledStrayIOSocket lconn;
 		struct InterlocInf {
@@ -315,9 +316,11 @@ class ConnectingSocket : public IResource {
 			redy->s = FutureState::Completed;
 			#ifdef _WIN32
 			if(inf.status) redy->r = ConnectionResultSock::Ok(std::move(sock));
+			else if(inf.lerr == ERROR_OPERATION_ABORTED) redy->r = ConnectionResultSock::Err("Operation cancelled");
 			else redy->r = retSysNetError<ConnectionResultSock>("ConnectEx async failed", inf.lerr);
 			#else
-			if((inf & EPOLLERR) != 0){
+			if((inf & EPOLLHUP) != 0) redy->r = ConnectionResultSock::Err("Operation cancelled");
+			else if((inf & EPOLLERR) != 0){
 				int serr = 0;
 				::socklen_t serrlen = sizeof(serr);
 				if(::getsockopt(sock->rh, SOL_SOCKET, SO_ERROR, reinterpret_cast<void*>(&serr), &serrlen) < 0) redy->r = retSysNetError<ConnectionResultSock>("connect async failed, and trying to understand why failed too");
@@ -326,6 +329,13 @@ class ConnectingSocket : public IResource {
 			else redy->r = retSysNetError<ConnectionResultSock>("connect async scramble skedable");
 			#endif
 			engine->engine->notify(redy);
+		}
+		void cancel() override {
+			#ifdef _WIN32
+			CancelIoEx(sock->rh, overlapped());
+			#else
+			notify(EPOLLHUP);
+			#endif
 		}
 };
 
