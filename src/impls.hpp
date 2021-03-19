@@ -119,18 +119,6 @@ template<typename T> std::shared_ptr<AggregateFuture<T>> aggregAll(){
 	return f;
 }
 
-template<typename T> Future<T> asyncSleep(Yengine* engine, unsigned ms, T ret){
-	std::shared_ptr<OutsideFuture<T>> f(new OutsideFuture<T>());
-	Daemons::launch([engine, ms](std::shared_ptr<OutsideFuture<T>> f, auto rt){
-		std::this_thread::sleep_for(std::chrono::milliseconds(ms));
-		f->s = FutureState::Completed;
-		f->r = std::move(rt);
-		engine->notify(f);
-	}, f, movonly<T>(new T(ret)));
-	return f;
-}
-Future<void> asyncSleep(Yengine* engine, unsigned ms);
-
 /**
  * Blocks current thread until completion of a future (for a generating future, until a result is produced) on the engine
  * DO _NOT_ USE FROM INSIDE ASYNC CODE!

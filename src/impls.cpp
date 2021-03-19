@@ -2,16 +2,6 @@
 
 namespace yasync {
 
-Future<void> asyncSleep(Yengine* engine, unsigned ms){
-	std::shared_ptr<OutsideFuture<void>> f(new OutsideFuture<void>());
-	Daemons::launch([engine, ms](std::shared_ptr<OutsideFuture<void>> f){
-		std::this_thread::sleep_for(std::chrono::milliseconds(ms));
-		f->s = FutureState::Completed;
-		engine->notify(f);
-	}, f);
-	return f;
-}
-
 template<> void blawait<void>(Yengine* engine, Future<void> f){
 	bool t = false;
 	std::mutex synch;
