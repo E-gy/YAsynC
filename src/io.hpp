@@ -65,7 +65,7 @@ class IResource {
 	 * Due to asynchronous nature of cancellation the "next"[ly requested] operation may get cancelled if there is no pending operation at the atomic instant of cancellation.
 	 * Implementations reserve the right to cancel underlying IO or simply detach at their discretion. 
 	 */
-	virtual void cancel();
+	virtual void cancel() = 0;
 	#ifdef _WIN32
 	struct Overlapped {
 		OVERLAPPED overlapped;
