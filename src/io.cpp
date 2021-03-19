@@ -39,10 +39,18 @@ class FileResource : public IAIOResource {
 	HandledResource res;
 	std::array<char, DEFAULT_BUFFER_SIZE> buffer;
 	std::shared_ptr<OutsideFuture<IOCompletionInfo>> engif;
-	void notify(IOCompletionInfo inf){
+	void notify(IOCompletionInfo inf) override {
 		engif->r = inf;
 		engif->s = FutureState::Completed;
 		engine->notify(engif);
+	}
+	void cancel() override {
+		#ifdef _WIN32
+		CancelIoEx(res->rh, overlapped());
+		// notify(IOCompletionInfo { FALSE, 0, ERROR_OPERATION_ABORTED });
+		#else
+		notify(EPOLLHUP);
+		#endif
 	}
 	#ifdef _WIN32
 	#else
