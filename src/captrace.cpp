@@ -20,7 +20,7 @@ void TraceCapture::setup(){
 }
 
 TraceCapture::TraceCapture(unsigned upto){
-	trace.resize(upto);
+	trace.reserve(upto);
 	auto stackSize =
 	#ifdef _WIN32
 	#include <windows.h>
@@ -29,7 +29,7 @@ TraceCapture::TraceCapture(unsigned upto){
 	::backtrace(trace.data(), upto);
 	#endif
 	trace.resize(stackSize);
-	trace.erase(trace.begin());
+	if(trace.size() > 0) trace.erase(trace.begin());
 }
 
 std::ostream& operator<<(std::ostream& os, const TraceCapture& trace){
