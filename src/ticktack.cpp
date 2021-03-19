@@ -10,11 +10,14 @@ TickTack::TickTack() : stahp(std::make_shared<bool>(false)) {
 }
 
 void TickTack::shutdown(){
-	*stahp = true;
-	std::unique_lock lok(lock);
-	cvStahp.notify_one();
-	for(auto t = ent.begin(); t != ent.end(); t++) t->f(t->id, true);
-	ent.clear();
+	std::set<El> rent;
+	{
+		std::unique_lock lok(lock);
+		*stahp = true;
+		cvStahp.notify_one();
+		std::swap(rent, ent);
+	}
+	for(auto t = rent.begin(); t != rent.end(); t++) t->f(t->id, true);
 }
 
 TickTack::Id TickTack::start(const TimePoint& t, const Duration& d, Callback && f){
