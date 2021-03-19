@@ -26,7 +26,7 @@ template<typename T> class IFutureG : public IFutureT<T>, public IFutureGa {
 	public:
 		const Generator<T> gen;
 		IFutureG(Generator<T> g) : gen(g) {}
-		FutureState state() override { return s; }
+		FutureState state() const override { return s; }
 		movonly<T> result() override { return std::move(val); }
 		void onQueued() override { s = FutureState::Queued; }
 		void set(FutureState state){ s = state; }

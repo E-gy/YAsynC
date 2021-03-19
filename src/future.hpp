@@ -20,7 +20,7 @@ class IFuture {
 		 * 
 		 * @returns current state of the future
 		 */
-		virtual FutureState state() = 0;
+		virtual FutureState state() const = 0;
 		/**
 		 * Called by the engine when [right before] the future is queued
 		 */

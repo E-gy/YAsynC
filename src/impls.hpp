@@ -76,8 +76,8 @@ template<typename T> class AggregateFuture : public IFutureT<std::vector<T>> {
 	public:
 		std::weak_ptr<AggregateFuture> slf;
 		AggregateFuture() = default;
-		FutureState state(){ return bal > 0 ? FutureState::Running : FutureState::Completed; }
-		movonly<std::vector<T>> result(){ return std::move(results); }
+		FutureState state() const override { return bal > 0 ? FutureState::Running : FutureState::Completed; }
+		movonly<std::vector<T>> result() override { return std::move(results); }
 		AggregateFuture& add(Yengine* engine, Future<T> f){
 			{
 				std::unique_lock lok(synch);
@@ -98,8 +98,8 @@ template<> class AggregateFuture<void> : public IFutureT<void> {
 	public:
 		std::weak_ptr<AggregateFuture> slf;
 		AggregateFuture() = default;
-		FutureState state(){ return bal > 0 ? FutureState::Running : FutureState::Completed; }
-		movonly<void> result(){ return movonly<void>(); }
+		FutureState state() const override { return bal > 0 ? FutureState::Running : FutureState::Completed; }
+		movonly<void> result() override { return movonly<void>(); }
 		AggregateFuture& add(Yengine* engine, Future<void> f){
 			{
 				std::unique_lock lok(synch);
