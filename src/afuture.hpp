@@ -74,3 +74,12 @@ template<typename T> class Future : public std::variant<Genf<T>, Notf<T>> {
 };
 
 }
+
+namespace std {
+	template<> struct hash<yasync::AFuture> {
+		inline size_t operator()(const yasync::AFuture& f) const { return std::hash<std::variant<yasync::AGenf, yasync::ANotf>>{}(f); }
+	};
+	template<typename T> struct hash<yasync::Future<T>> {
+		inline size_t operator()(const yasync::Future<T>& f) const { return std::hash<std::variant<yasync::Genf<T>, yasync::Notf<T>>>{}(f); }
+	};
+}
