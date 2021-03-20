@@ -303,46 +303,29 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 	return result<LSock, std::string>::Ok(LSock(new AListeningSocket<SDomain, SType, SProto, AddressInfo, Errs, Acc>(engine, sock, erracc, acceptor)));
 }
 
-using ConnectionResultSock = result<HandledStrayIOSocket, std::string>;
 using ConnectionResult = result<IOResource, std::string>;
 
 class ConnectingSocket : public IResource {
 	IOYengine::Ticket engine;
 	HandledStrayIOSocket sock;
-	std::shared_ptr<OutsideFuture<ConnectionResultSock>> redy;
-	void notify(IOCompletionInfo inf) override {
-		redy->s = FutureState::Completed;
-		#ifdef _WIN32
-		if(inf.status) redy->r = ConnectionResultSock::Ok(std::move(sock));
-		else if(inf.lerr == ERROR_OPERATION_ABORTED) redy->r = ConnectionResultSock::Err("Operation cancelled");
-		else redy->r = retSysNetError<ConnectionResultSock>("ConnectEx async failed", inf.lerr);
-		#else
-		if((inf & EPOLLHUP) != 0) redy->r = ConnectionResultSock::Err("Operation cancelled");
-		else if((inf & EPOLLERR) != 0){
-			int serr = 0;
-			::socklen_t serrlen = sizeof(serr);
-			if(::getsockopt(sock->rh, SOL_SOCKET, SO_ERROR, reinterpret_cast<void*>(&serr), &serrlen) < 0) redy->r = retSysNetError<ConnectionResultSock>("connect async failed, and trying to understand why failed too");
-			else redy->r = retSysNetError<ConnectionResultSock>("connect async failed", serr);
-		} else if((inf & EPOLLOUT) != 0) redy->r = ConnectionResultSock::Ok(std::move(sock));
-		else redy->r = retSysNetError<ConnectionResultSock>("connect async scramble skedable");
-		#endif
-		engine->engine->notify(redy);
-	}
+	void notify(IOCompletionInfo inf) override;
 	public:
-		ConnectingSocket(IOYengine* e, HandledStrayIOSocket && s) : engine(e->ticket()), sock(std::move(s)), redy(new OutsideFuture<ConnectionResultSock>()) {}
-		void cancel() override {
-			#ifdef _WIN32
-			CancelIoEx(sock->rh, overlapped());
-			#else
-			notify(EPOLLHUP);
-			#endif
-		}
+		//exposed exclusively for `netConnectTo`
+		using ConnRedyResult = result<void, std::string>;
+		std::shared_ptr<OutsideFuture<ConnRedyResult>> redy;
+		std::weak_ptr<ConnectingSocket> slf;
+		ConnectingSocket(IOYengine* e, HandledStrayIOSocket && s) : engine(e->ticket()), sock(std::move(s)), redy(new OutsideFuture<ConnRedyResult>()) {}
+		//
+		void cancel() override;
+		/**
+		 * Returns future that completes when connection is established
+		 */
+		Future<ConnectionResult> connest();
 };
 
-template<int SDomain, int SType, int SProto, typename AddressInfo> result<Future<ConnectionResult>, std::string> netConnectTo(IOYengine* engine, const NetworkedAddressInfo* addri){
-	using Result = result<Future<ConnectionResult>, std::string>;
+template<int SDomain, int SType, int SProto, typename AddressInfo> result<std::shared_ptr<ConnectingSocket>, std::string> netConnectTo(IOYengine* engine, const NetworkedAddressInfo* addri){
+	using Result = result<std::shared_ptr<ConnectingSocket>, std::string>;
 	SocketHandle sock;
-	HandledStrayIOSocket hsock; 
 	#ifdef _WIN32
 	sock = ::WSASocket(SDomain, SType, SProto, NULL, 0, WSA_FLAG_OVERLAPPED);
 	if(sock == INVALID_SOCKET) return retSysError<Result>("WSA socket construction failed");
@@ -354,8 +337,8 @@ template<int SDomain, int SType, int SProto, typename AddressInfo> result<Future
 	sock = ::socket(SDomain, SType, SProto);
 	if(sock < 0) return retSysError<Result>("socket construction failed");
 	#endif
-	hsock = HandledStrayIOSocket(new AHandledStrayIOSocket(sock, true));
-	auto csock = std::shared_ptr<ConnectingSocket>(new ConnectingSocket(engine, std::move(hsock)));
+	auto csock = std::make_shared<ConnectingSocket>(engine, std::make_unique<AHandledStrayIOSocket>(sock, true));
+	csock->slf = csock;
 	#ifdef _WIN32
 	if(!::CreateIoCompletionPort(reinterpret_cast<HANDLE>(sock), engine->ioPo->rh, COMPLETION_KEY_IO, 0)) return retSysError<Result>("ioCP add failed");
 	if(!::SetFileCompletionNotificationModes(reinterpret_cast<HANDLE>(sock), FILE_SKIP_COMPLETION_PORT_ON_SUCCESS)) return retSysError<Result>("ioCP set notification mode failed");
@@ -379,7 +362,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo> result<Future
 		#endif
 		{
 			csock->redy->s = FutureState::Completed;
-			csock->redy->r = ConnectionResultSock::Ok(std::move(csock->sock));
+			csock->redy->r = ConnectingSocket::ConnRedyResult::Ok();
 			break;
 		}
 		#ifdef _WIN32
@@ -390,15 +373,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo> result<Future
 			break; //async connect, cross your fingers it succeeds. otherwise, and if there're remaining candidates, we're in deep quack
 	}
 	if(!candidate) return Result::Err("Exhausted address space");
-	return std::static_pointer_cast<IFutureT<ConnectionResultSock>>(csock->redy) >> [engine, csock](ConnectionResultSock res){ //we need to grab `csock` so it lives until outside handover lul
-		if(auto ok = res.ok()){
-			#ifdef _WIN32
-			if(::setsockopt((*ok)->sock(), SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT, NULL, 0)) return retSysNetError<ConnectionResult>("update context connect failed");
-			#endif
-			return ConnectionResult::Ok(engine->taek(HandledResource(ok->release())));
-		}
-		return ConnectionResult::Err(*res.err());
-	};
+	return csock;
 }
 
 }

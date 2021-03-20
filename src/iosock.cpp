@@ -4,6 +4,8 @@
 
 namespace yasync::io {
 
+using namespace magikop;
+
 NetworkedAddressInfo::NetworkedAddressInfo(::addrinfo* ads) : addresses(ads) {}
 NetworkedAddressInfo::NetworkedAddressInfo(NetworkedAddressInfo && mov){
 	addresses = mov.addresses;
@@ -63,5 +65,39 @@ std::string printSysNetError(const std::string& message){ return printSysNetErro
 std::string printSysNetError(const std::string& message, sysneterr_t e){ return printSysError(message, e); }
 std::string printSysNetError(const std::string& message){ return printSysError(message); }
 #endif
+
+void ConnectingSocket::notify(IOCompletionInfo inf){
+	redy->s = FutureState::Completed;
+	#ifdef _WIN32
+	if(inf.status) redy->r = ConnRedyResult::Ok();
+	else if(inf.lerr == ERROR_OPERATION_ABORTED) redy->r = ConnRedyResult::Err("Operation cancelled");
+	else redy->r = retSysNetError<ConnRedyResult>("ConnectEx async failed", inf.lerr);
+	#else
+	if((inf & EPOLLHUP) != 0) redy->r = ConnRedyResult::Err("Operation cancelled");
+	else if((inf & EPOLLERR) != 0){
+		int serr = 0;
+		::socklen_t serrlen = sizeof(serr);
+		if(::getsockopt(sock->rh, SOL_SOCKET, SO_ERROR, reinterpret_cast<void*>(&serr), &serrlen) < 0) redy->r = retSysNetError<ConnRedyResult>("connect async failed, and trying to understand why failed too");
+		else redy->r = retSysNetError<ConnRedyResult>("connect async failed", serr);
+	} else if((inf & EPOLLOUT) != 0) redy->r = ConnRedyResult::Ok();
+	else redy->r = retSysNetError<ConnRedyResult>("connect async scramble skedable");
+	#endif
+	engine->engine->notify(redy);
+}
+void ConnectingSocket::cancel(){
+	#ifdef _WIN32
+	CancelIoEx(sock->rh, overlapped());
+	#else
+	notify(EPOLLHUP);
+	#endif
+}
+Future<ConnectionResult> ConnectingSocket::connest(){
+	return std::static_pointer_cast<IFutureT<ConnRedyResult>>(redy) >> ([=, self = slf.lock()](){
+		#ifdef _WIN32
+		if(::setsockopt(sock->sock(), SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT, NULL, 0)) return retSysNetError<ConnectionResult>("update context connect failed");
+		#endif
+		return ConnectionResult::Ok(engine->taek(HandledResource(sock.release())));	
+	}|[](auto err){ return ConnectionResult::Err(err); });
+}
 
 }
