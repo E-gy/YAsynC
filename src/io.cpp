@@ -128,6 +128,10 @@ class FileResource : public IAIOResource {
 				}
 				DWORD transferred = 0;
 				while(ReadFile(res->rh, buffer.begin(), buffer.size(), &transferred, overlapped())){
+					if(transferred == 0){ //EOF on ECONNRESET
+						done = true;
+						return ReadResult::Ok(data);
+					}
 					data.insert(data.end(), buffer.begin(), buffer.begin() + transferred);
 					overlapped()->Offset += transferred;
 					if(bytes > 0 && data.size() >= bytes){
@@ -211,6 +215,10 @@ class FileResource : public IAIOResource {
 							done = true;
 							return retSysError<WriteResult>("Async Write failed", result.lerr);
 					} else {
+						if(result.transferred == 0){
+							done = true;
+							return WriteResult::Err("Write reached EOWTF(?)");
+						}
 						data.erase(data.begin(), data.begin()+result.transferred);
 						overlapped()->Offset += result.transferred;
 						if(data.empty()){
@@ -221,6 +229,10 @@ class FileResource : public IAIOResource {
 				}
 				DWORD transferred = 0;
 				while(WriteFile(res->rh, data.data(), data.size(), &transferred, overlapped())){
+					if(transferred == 0){
+						done = true;
+						return WriteResult::Err("Write reached EOWTF(?)");
+					}
 					data.erase(data.begin(), data.begin()+transferred);
 					overlapped()->Offset += transferred;
 					if(data.empty()){
@@ -244,12 +256,16 @@ class FileResource : public IAIOResource {
 					switch(leve){
 						case EPOLLOUT: {
 							int transferred;
-							while((transferred = ::write(res->rh, data.data(), data.size())) >= 0){
+							while((transferred = ::write(res->rh, data.data(), data.size())) > 0){
 								data.erase(data.begin(), data.begin()+transferred);
 								if(data.empty()){
 									done = true;
 									return WriteResult::Ok();
 								}
+							}
+							if(transferred == 0){
+								done = true;
+								return WriteResult::Err("Write reached EOWTF(?)");
 							}
 							if(errno != EWOULDBLOCK && errno != EAGAIN){
 								done = true;
