@@ -307,29 +307,29 @@ using ConnectionResultSock = result<HandledStrayIOSocket, std::string>;
 using ConnectionResult = result<IOResource, std::string>;
 
 class ConnectingSocket : public IResource {
+	IOYengine::Ticket engine;
+	HandledStrayIOSocket sock;
+	std::shared_ptr<OutsideFuture<ConnectionResultSock>> redy;
+	void notify(IOCompletionInfo inf) override {
+		redy->s = FutureState::Completed;
+		#ifdef _WIN32
+		if(inf.status) redy->r = ConnectionResultSock::Ok(std::move(sock));
+		else if(inf.lerr == ERROR_OPERATION_ABORTED) redy->r = ConnectionResultSock::Err("Operation cancelled");
+		else redy->r = retSysNetError<ConnectionResultSock>("ConnectEx async failed", inf.lerr);
+		#else
+		if((inf & EPOLLHUP) != 0) redy->r = ConnectionResultSock::Err("Operation cancelled");
+		else if((inf & EPOLLERR) != 0){
+			int serr = 0;
+			::socklen_t serrlen = sizeof(serr);
+			if(::getsockopt(sock->rh, SOL_SOCKET, SO_ERROR, reinterpret_cast<void*>(&serr), &serrlen) < 0) redy->r = retSysNetError<ConnectionResultSock>("connect async failed, and trying to understand why failed too");
+			else redy->r = retSysNetError<ConnectionResultSock>("connect async failed", serr);
+		} else if((inf & EPOLLOUT) != 0) redy->r = ConnectionResultSock::Ok(std::move(sock));
+		else redy->r = retSysNetError<ConnectionResultSock>("connect async scramble skedable");
+		#endif
+		engine->engine->notify(redy);
+	}
 	public:
-		IOYengine::Ticket engine;
-		HandledStrayIOSocket sock;
-		std::shared_ptr<OutsideFuture<ConnectionResultSock>> redy;
 		ConnectingSocket(IOYengine* e, HandledStrayIOSocket && s) : engine(e->ticket()), sock(std::move(s)), redy(new OutsideFuture<ConnectionResultSock>()) {}
-		void notify(IOCompletionInfo inf) override {
-			redy->s = FutureState::Completed;
-			#ifdef _WIN32
-			if(inf.status) redy->r = ConnectionResultSock::Ok(std::move(sock));
-			else if(inf.lerr == ERROR_OPERATION_ABORTED) redy->r = ConnectionResultSock::Err("Operation cancelled");
-			else redy->r = retSysNetError<ConnectionResultSock>("ConnectEx async failed", inf.lerr);
-			#else
-			if((inf & EPOLLHUP) != 0) redy->r = ConnectionResultSock::Err("Operation cancelled");
-			else if((inf & EPOLLERR) != 0){
-				int serr = 0;
-				::socklen_t serrlen = sizeof(serr);
-				if(::getsockopt(sock->rh, SOL_SOCKET, SO_ERROR, reinterpret_cast<void*>(&serr), &serrlen) < 0) redy->r = retSysNetError<ConnectionResultSock>("connect async failed, and trying to understand why failed too");
-				else redy->r = retSysNetError<ConnectionResultSock>("connect async failed", serr);
-			} else if((inf & EPOLLOUT) != 0) redy->r = ConnectionResultSock::Ok(std::move(sock));
-			else redy->r = retSysNetError<ConnectionResultSock>("connect async scramble skedable");
-			#endif
-			engine->engine->notify(redy);
-		}
 		void cancel() override {
 			#ifdef _WIN32
 			CancelIoEx(sock->rh, overlapped());
