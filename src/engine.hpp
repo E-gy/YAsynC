@@ -17,38 +17,13 @@
 
 namespace yasync {
 
-class IFutureGa {};
-
-template<typename T> class IFutureG : public IFutureT<T>, public IFutureGa {
-	protected:
-		FutureState s = FutureState::Suspended;
-		movonly<T> val;
-	public:
-		const Generator<T> gen;
-		IFutureG(Generator<T> g) : gen(g) {}
-		FutureState state() const override { return s; }
-		movonly<T> result() override { return std::move(val); }
-		void onQueued() override { s = FutureState::Queued; }
-		void set(FutureState state){ s = state; }
-		void set(FutureState state, movonly<T> && v){
-			set(state);
-			val = std::move(v);
-		}
-		#ifdef _DEBUG
-		bool isExternal() override { return false; }
-		#endif
-};
-
-using FutureGa = std::shared_ptr<IFutureGa>;
-template<typename T> using FutureG = std::shared_ptr<IFutureG<T>>;
-
 /**
  * Transforms a generator into a future
  * @param gen the generator
  * @returns future
  */ 
-template<typename T> Future<T> defer(Generator<T> gen){
-	return std::make_shared<IFutureG<T>>(gen);
+template<typename T> Genf<T> defer(Generator<T> gen){
+	return std::make_shared<IGenfT<T>>(gen);
 }
 
 template<typename V, typename U, typename F> class ChainingGenerator : public IGeneratorT<V> {
@@ -207,30 +182,28 @@ class Yengine {
 	/**
 	 * Future → Future
 	 */
-	std::unordered_map<AFuture, AFuture> notifications;
+	std::unordered_map<AFuture, AGenf> notifications;
 	unsigned workers;
 	public:
 		Yengine(unsigned threads);
 		void wle();
+		void execute(const AGenf&);
+		void notify(const ANotf&);
 		/**
 		 * Resumes parallel yield of the future
 		 * @param f future to execute
 		 * @returns f
 		 */ 
-		template<typename T> Future<T> execute(Future<T> f){
-			f->onQueued();
-			work.push(f);
+		template<typename T> inline auto execute(const Genf<T>& f){
+			execute(std::static_pointer_cast<AGenf>(f));
 			return f;
-		}
-		template<typename T> auto operator<<=(Future<T> f){
-			return execute(f);
 		}
 		/**
 		 * Transforms the generator into a future on this engine, and executes in parallel
 		 * @param gen the generator
 		 * @returns future
 		 */ 
-		template<typename T> Future<T> launch(Generator<T> gen){
+		template<typename T> inline Genf<T> launch(Generator<T> gen){
 			return execute(defer(gen));
 		}
 		/**
@@ -239,7 +212,10 @@ class Yengine {
 		 * !!!USE CANCELLATION WITH CARE!!!
 		 * On cancellation the entire awaited chain is yeeted into oblivion.
 		 */
-		void notify(AFuture f);
+		template<typename T> inline auto notify(const Notf<T>& f){
+			notify(std::static_pointer_cast<ANotf>(f));
+			return f;
+		}
 		/**
 		 * Notifies the engine of cancellation of an external future.
 		 * !!!USE CANCELLATION WITH CARE!!!
@@ -247,16 +223,31 @@ class Yengine {
 		 * 
 		 * _It is just an alias for notify._
 		 */
-		template<typename T> void cancelled(Future<T> f){ notify(f); }
+		template<typename T> inline void cancelled(const Notf<T>& f){ notify(f); }
 	private:
 		std::condition_variable condWLE;
 		std::mutex notificationsLock;
-		void notifiAdd(AFuture k, AFuture v);
-		std::optional<AFuture> notifiDrop(AFuture k);
+		void notifiAdd(AFuture k, AGenf v);
+		std::optional<AGenf> notifiDrop(AFuture k);
 		void threado(AFuture task);
 		void threadwork();
 };
 
-template<typename T> auto operator<<=(Yengine* const engine, Future<T> f){ return engine->execute(f); }
+/**
+ * Submits generative future for execution.
+ * @see Yengine::execute
+ * @returns f
+ */
+template<typename T> inline auto operator<<=(Yengine* const engine, const Genf<T>& gf){ return engine->execute(gf); }
+
+/**
+ * Submits generative future for execution.
+ * No-op if the future is not generative.
+ * @see Yengine::execute
+ */
+template<typename T> inline auto operator<<=(Yengine* const engine, const Future<T>& f){
+	if(auto gf = std::get_if<Genf<T>>(&f)) engine->execute(*gf);
+	return f;
+}
 
 }

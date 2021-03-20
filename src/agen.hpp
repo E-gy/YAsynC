@@ -1,8 +1,8 @@
 #pragma once
 
-#include <variant>
-#include <memory>
-#include "future.hpp"
+#include "afuture.hpp"
+#include "captrace.hpp"
+#include <optional>
 
 namespace yasync {
 
@@ -33,5 +33,54 @@ template<typename T> class IGeneratorT {
 };
 
 template<typename T> using Generator = std::shared_ptr<IGeneratorT<T>>;
+
+/**
+ * Generator bound future
+ */
+class IGenf {
+	protected:
+		/**
+		 * Proxy for bound generator.
+		 * @see IGeneratorT::done 
+		 */
+		virtual bool done() const = 0;
+		/**
+		 * Resumes generation process. Proxy for bound generator.
+		 * @see IGeneratorT::resume
+		 * If the generator returns a future, forward it so it can be awaited.
+		 * If however the generator returns a value, capture in own result and return nothing.
+		 */
+		virtual std::optional<AFuture> resume(const Yengine*) = 0;
+	private: //State Machine controlled by the engine
+		FutureState s = FutureState::Suspended;
+		void setState(FutureState st){ s = st; }
+	public:
+		friend class Yengine;
+		FutureState state() const { return s; }
+		TraceCapture trace;
+};
+
+template<typename T> class IGenfT : public IGenf {
+	protected:
+		const Generator<T> gen;
+		FutureState s = FutureState::Suspended;
+		movonly<T> val;
+	public:
+		IGenfT(Generator<T> g) : gen(g) {}
+		// Generator
+		bool done() const override { return gen->done(); }
+		std::optional<AFuture> resume(const Yengine* engine) override {
+			return std::visit(overloaded {
+				[this](movonly<T> && result) -> std::optional<AFuture> {
+					val = std::move(result);
+					return std::nullopt;
+				},
+				[this](AFuture awa) -> std::optional<AFuture> {
+					return awa;
+				},
+			}, gen->resume(engine));
+		}
+		movonly<T> result() override { return std::move(val); }
+};
 
 }
