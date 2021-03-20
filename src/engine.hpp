@@ -7,7 +7,6 @@
 #include <any>
 #include <tuple>
 
-#include "agen.hpp"
 #include "future.hpp"
 #include "threadsafequeue.hpp"
 
@@ -32,15 +31,15 @@ template<typename V, typename U, typename F> class ChainingGenerator : public IG
 	F f;
 	public:
 		ChainingGenerator(Future<U> awa, F && map) : w(awa), f(std::move(map)) {}
-		bool done() const override { return reqd && w->state() == FutureState::Completed; }
+		bool done() const override { return reqd && w.state() == FutureState::Completed; }
 		std::variant<AFuture, movonly<V>> resume(const Yengine*) override {
-			if(w->state() == FutureState::Completed || !(reqd = !reqd)){
+			if(w.state() == FutureState::Completed || !(reqd = !reqd)){
 				if constexpr (std::is_same<V, void>::value){
 					if constexpr (std::is_same<U, void>::value) f();
-					else f(*w->result());
+					else f(*w.result());
 					return movonly<void>();
 				} else if constexpr (std::is_same<U, void>::value) return movonly<V>(f());
-				else return movonly<V>(f(*w->result()));
+				else return movonly<V>(f(*w.result()));
 			} else return w;
 		}
 };
@@ -64,7 +63,7 @@ template<typename V, typename U, typename F> class ChainingWrappingGenerator : p
 				case State::A0: {
 					Future<V> f1;
 					if constexpr (std::is_same<U, void>::value) f1 = gf();
-					else f1 = gf(*awa->result());
+					else f1 = gf(*awa.result());
 					nxt = f1;
 					[[fallthrough]];
 				}
@@ -73,17 +72,17 @@ template<typename V, typename U, typename F> class ChainingWrappingGenerator : p
 					return *nxt;
 				case State::A1: {
 					auto f1 = *nxt;
-					if(f1->state() == FutureState::Completed)
-						if(awa->state() == FutureState::Completed) state = State::Fi;
+					if(f1.state() == FutureState::Completed)
+						if(awa.state() == FutureState::Completed) state = State::Fi;
 						else {
 							state = State::I;
 							nxt = std::nullopt;
 						}
 					else state = State::A1r;
-					return f1->result();
+					return f1.result();
 				}
 				case State::Fi:
-					return (*nxt)->result();
+					return (*nxt).result();
 				default: //never
 					return awa;
 			}
@@ -109,7 +108,7 @@ template<typename U, typename F> auto then(Future<U> f, F && map){
 		using V = std::decay_t<decltype(map())>;
 		return then_spec(f, std::move(map), _typed<V>{});
 	} else {
-		using V = std::decay_t<decltype(map(*f->result()))>;
+		using V = std::decay_t<decltype(map(*f.result()))>;
 		return then_spec(f, std::move(map), _typed<V>{});
 	}
 }
@@ -165,15 +164,6 @@ template<typename F, typename S> auto lambdagen(F && f, S arg){
 	return lambdagen_spec(_typed<V>{}, std::move(f), arg);
 }
 
-/**
- * @see then but with manual type parametrization
- */
-template<typename V, typename U, typename F> Future<V> them(Future<U> f, F && map){
-	using t_rt = std::decay_t<decltype(map(*(f->result())))>;
-	if constexpr (std::is_convertible<t_rt, AFuture>::value) return defer(Generator<V>(new ChainingWrappingGenerator<V, U, F>(f, std::move(map))));
-	else return defer(Generator<V>(new ChainingGenerator<V, U, F>(f, std::move(map))));
-}
-
 class Yengine {
 	/**
 	 * Queue<Future<?>>
@@ -195,7 +185,7 @@ class Yengine {
 		 * @returns f
 		 */ 
 		template<typename T> inline auto execute(const Genf<T>& f){
-			execute(std::static_pointer_cast<AGenf>(f));
+			execute(std::static_pointer_cast<IGenf>(f));
 			return f;
 		}
 		/**
@@ -213,7 +203,7 @@ class Yengine {
 		 * On cancellation the entire awaited chain is yeeted into oblivion.
 		 */
 		template<typename T> inline auto notify(const Notf<T>& f){
-			notify(std::static_pointer_cast<ANotf>(f));
+			notify(std::static_pointer_cast<INotf>(f));
 			return f;
 		}
 		/**
@@ -246,7 +236,7 @@ template<typename T> inline auto operator<<=(Yengine* const engine, const Genf<T
  * @see Yengine::execute
  */
 template<typename T> inline auto operator<<=(Yengine* const engine, const Future<T>& f){
-	if(auto gf = std::get_if<Genf<T>>(&f)) engine->execute(*gf);
+	if(auto gf = f.genf()) engine->execute(*gf);
 	return f;
 }
 
