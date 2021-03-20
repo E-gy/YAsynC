@@ -16,6 +16,7 @@ namespace yasync {
 class TickTack {
 	public:
 		using Id = unsigned long long;
+		const Id UnId = 0;
 		using Clock = std::chrono::steady_clock;
 		using TimePoint = std::chrono::time_point<Clock>;
 		using Duration = Clock::duration;
@@ -49,7 +50,7 @@ class TickTack {
 		};
 		std::mutex lock;
 		std::set<El> ent;
-		Id nid;
+		Id nid = UnId+1;
 	public:
 		TickTack();
 		/**
