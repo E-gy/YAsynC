@@ -5,7 +5,7 @@
 
 namespace yasync {
 
-TickTack::TickTack() : stahp(std::make_shared<bool>(false)) {
+TickTack::TickTack() : stahp(std::make_shared<std::atomic_bool>(false)) {
 	Daemons::launch([this](){ threadwork(); });
 }
 

@@ -5,6 +5,7 @@
 #include <functional>
 #include <set>
 #include <chrono>
+#include <atomic>
 
 namespace yasync {
 
@@ -71,7 +72,7 @@ class TickTack {
 		 */
 		void stop(Id);
 	private:
-		std::shared_ptr<bool> stahp;
+		std::shared_ptr<std::atomic_bool> stahp;
 		std::condition_variable cvStahp;
 		void threadwork();
 };
