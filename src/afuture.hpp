@@ -48,7 +48,7 @@ template<> class movonly<void> {
 
 //
 
-class AFuture : std::variant<AGenf, ANotf> {
+class AFuture : public std::variant<AGenf, ANotf> {
 	public:
 		inline AFuture(AGenf f) : std::variant<AGenf, ANotf>(f) {}
 		inline AFuture(ANotf f) : std::variant<AGenf, ANotf>(f) {}
@@ -59,7 +59,7 @@ class AFuture : std::variant<AGenf, ANotf> {
 		FutureState state() const;
 };
 
-template<typename T> class Future : std::variant<Genf<T>, Notf<T>> {
+template<typename T> class Future : public std::variant<Genf<T>, Notf<T>> {
 	public:
 		inline Future(Genf<T> f) : std::variant<Genf<T>, Notf<T>>(f) {}
 		inline Future(Notf<T> f) : std::variant<Genf<T>, Notf<T>>(f) {}
