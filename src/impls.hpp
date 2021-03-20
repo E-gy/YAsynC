@@ -30,16 +30,7 @@ template<typename Iter> class IteratingGenerator<Iter, void> : public IGenerator
 		}
 };
 
-/*class UnFuture : public Future<void> {
-	public:
-		FutureState s = FutureState::Running;
-		FutureState state(){ return s; }
-		std::optional<void> result(){
-			return std::optional(void);
-		}
-};*/
-
-template<typename T> class OutsideFuture : public IFutureT<T> {
+template<typename T> class OutsideFuture : public INotfT<T> {
 	public:
 		OutsideFuture(){}
 		FutureState s = FutureState::Running;
@@ -48,7 +39,7 @@ template<typename T> class OutsideFuture : public IFutureT<T> {
 		movonly<T> result() override { return std::move(r); }
 };
 
-template<> class OutsideFuture<void> : public IFutureT<void> {
+template<> class OutsideFuture<void> : public INotfT<void> {
 	public:
 		OutsideFuture(){}
 		FutureState s = FutureState::Running;
@@ -57,7 +48,7 @@ template<> class OutsideFuture<void> : public IFutureT<void> {
 };
 
 template<typename T> Future<T> completed(const T& t){
-	std::shared_ptr<OutsideFuture<T>> vf(new OutsideFuture<T>());
+	auto vf = std::make_shared<OutsideFuture<T>>();
 	vf->s = FutureState::Completed;
 	vf->r = t;
 	return vf;
@@ -69,7 +60,7 @@ inline Future<void> completed(){
 	return vf;
 }
 
-template<typename T> class AggregateFuture : public IFutureT<std::vector<T>> {
+template<typename T> class AggregateFuture : public INotfT<std::vector<T>> {
 	unsigned bal = 0;
 	std::mutex synch;
 	std::vector<T> results;
@@ -92,7 +83,7 @@ template<typename T> class AggregateFuture : public IFutureT<std::vector<T>> {
 		}
 };
 
-template<> class AggregateFuture<void> : public IFutureT<void> {
+template<> class AggregateFuture<void> : public INotfT<void> {
 	unsigned bal = 0;
 	std::mutex synch;
 	public:
