@@ -196,11 +196,11 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 			}
 			#endif
 			return ListenResult::Ok(engine->engine->launch(lambdagen([this, self = slf.lock()](const Yengine*, bool& done, int) -> Generesume<void> {
-				if(done) return movonly<void>();
+				if(done) return monoid<void>();
 				auto stahp = [&](){
 					done = true;
 					close();
-					return movonly<void>();
+					return monoid<void>();
 				};
 				if(engif->s == FutureState::Completed){
 					auto event = engif->result();

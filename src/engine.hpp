@@ -38,9 +38,9 @@ template<typename V, typename U, typename F> class ChainingGenerator : public IG
 				if constexpr (std::is_same<V, void>::value){
 					if constexpr (std::is_same<U, void>::value) f();
 					else f(*w.result());
-					return movonly<void>();
-				} else if constexpr (std::is_same<U, void>::value) return movonly<V>(f());
-				else return movonly<V>(f(*w.result()));
+					return monoid<void>();
+				} else if constexpr (std::is_same<U, void>::value) return monoid<V>(f());
+				else return monoid<V>(f(*w.result()));
 			} else return w;
 		}
 };
@@ -131,7 +131,7 @@ template<typename V, typename F, typename... State> class GeneratorLGenerator : 
 		}
 };
 
-template<typename V, typename F, typename... State> Generator<V> lambdagen_spec(_typed<std::variant<AFuture, movonly<V>>>, F && f, State... args){
+template<typename V, typename F, typename... State> Generator<V> lambdagen_spec(_typed<std::variant<AFuture, monoid<V>>>, F && f, State... args){
 	return Generator<V>(new GeneratorLGenerator<V, F, State...>(std::tuple<State...>(args...), std::move(f)));
 }
 
@@ -154,7 +154,7 @@ template<typename V, typename F, typename S> class GeneratorLGenerator<V, F, S> 
 		}
 };
 
-template<typename V, typename F, typename S> Generator<V> lambdagen_spec(_typed<std::variant<AFuture, movonly<V>>>, F && f, S arg){
+template<typename V, typename F, typename S> Generator<V> lambdagen_spec(_typed<std::variant<AFuture, monoid<V>>>, F && f, S arg){
 	return Generator<V>(new GeneratorLGenerator<V, F, S>(arg, std::move(f)));
 }
 

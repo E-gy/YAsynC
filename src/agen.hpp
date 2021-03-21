@@ -8,7 +8,7 @@ namespace yasync {
 
 class Yengine;
 
-template<typename T> using Generesume = std::variant<AFuture, movonly<T>>;
+template<typename T> using Generesume = std::variant<AFuture, monoid<T>>;
 
 /**
  * Generic asynchronous generator interface.
@@ -66,15 +66,15 @@ template<typename T> class IGenfT : public IGenf {
 	protected:
 		const Generator<T> gen;
 		FutureState s = FutureState::Suspended;
-		movonly<T> val;
+		T val;
 	public:
 		IGenfT(Generator<T> g) : gen(g) {}
 		// Generator
 		bool done() const override { return gen->done(); }
 		std::optional<AFuture> resume(const Yengine* engine) override {
 			return std::visit(overloaded {
-				[this](movonly<T> && result) -> std::optional<AFuture> {
-					val = std::move(result);
+				[this](monoid<T> && result) -> std::optional<AFuture> {
+					val = result.move();
 					return std::nullopt;
 				},
 				[this](AFuture awa) -> std::optional<AFuture> {
@@ -82,7 +82,28 @@ template<typename T> class IGenfT : public IGenf {
 				},
 			}, gen->resume(engine));
 		}
-		movonly<T> result(){ return std::move(val); }
+		Move<T> result(){ return std::move(val); }
+};
+template<> class IGenfT<void> : public IGenf {
+	using T = void;
+	protected:
+		const Generator<T> gen;
+		FutureState s = FutureState::Suspended;
+	public:
+		IGenfT(Generator<T> g) : gen(g) {}
+		// Generator
+		bool done() const override { return gen->done(); }
+		std::optional<AFuture> resume(const Yengine* engine) override {
+			return std::visit(overloaded {
+				[this](monoid<T> &&) -> std::optional<AFuture> {
+					return std::nullopt;
+				},
+				[this](AFuture awa) -> std::optional<AFuture> {
+					return awa;
+				},
+			}, gen->resume(engine));
+		}
+		Move<T> result(){}
 };
 
 }

@@ -21,7 +21,7 @@ class AFuture;
 template<typename T> class Future;
 
 /// Moved type for all types, which is void for void
-template<typename T> using Move = std::conditional<std::is_same<T, void>::value, void, T &&>::type;
+template<typename T> using Move = typename std::add_lvalue_reference<T>::type;
 
 class AFuture {
 	public:
@@ -65,7 +65,7 @@ template<typename T> class Future {
 		template<typename Visitor> decltype(auto) visit(Visitor &&) const;
 		template<typename Visitor> decltype(auto) visit(Visitor &&);
 		FutureState state() const;
-		movonly<T> result();
+		Move<T> result();
 };
 
 }
