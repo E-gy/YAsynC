@@ -57,7 +57,7 @@ class AFuture {
 	private:
 		Variant variant;
 	public:
-		inline AFuture(Variant v) : variant(v) {}
+		// inline AFuture(Variant v) : variant(v) {}
 		AFuture(AGenf);
 		AFuture(ANotf);
 		template<typename T> inline AFuture(Future<T>);
@@ -78,7 +78,7 @@ template<typename T> class Future {
 	private:
 		Variant variant;
 	public:
-		inline Future(Variant v) : variant(v) {}
+		// inline Future(Variant v) : variant(v) {}
 		Future(Genf<T>);
 		Future(Notf<T>);
 		// template<typename T> inline Future(std::shared_ptr<T> f); //generated futures don't have many reasons for being subtyped, therefor prefer notified futures for implicit convenience construction
