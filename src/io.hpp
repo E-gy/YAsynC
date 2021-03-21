@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <array>
 #include <string>
 
 #include "future.hpp"
@@ -302,10 +303,11 @@ class IOYengine {
 		unsigned tickets = 0;
 		void iothreadwork();
 		#ifdef _WIN32
-		static constexpr unsigned ioThreads = 1; //IO events are dispatched by notification to the engine
 		#else
 		SharedResource cfdStopSend, cfdStopReceive;
 		#endif
+		static constexpr unsigned ioThreads = 1; //IO events are dispatched by notification to the engine
+		std::array<std::thread, ioThreads> workers;
 };
 
 using FileOpenResult = result<IOResource, std::string>;
