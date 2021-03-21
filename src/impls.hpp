@@ -29,33 +29,53 @@ template<typename Iter> class IteratingGenerator<Iter, void> : public IGenerator
 		}
 };
 
-template<typename T> class OutsideFuture : public INotfT<T> {
+template<typename T> class OutsideFuture final : public INotfT<T> {
+	FutureState s = FutureState::Running;
+	T r;
 	public:
 		OutsideFuture(){}
-		FutureState s = FutureState::Running;
+		void set(FutureState st){ s = st; }
+		void set(FutureState st, T && rr){
+			r = std::move(rr);
+			set(st);
+		}
+		void set(FutureState st, monoid<T> && rr){ return set(st, rr.move()); }
 		FutureState state() const override { return s; }
-		T r;
 		monoid<T> result() override { return std::move(r); }
+		/// Marks future as completed with result
+		void completed(T && rr){ return set(FutureState::Completed, std::move(rr)); }
+		/// Marks future as running, moves previous result
+		Move<T> running(){
+			set(FutureState::Running);
+			return std::move(r);
+		}
 };
 
-template<> class OutsideFuture<void> : public INotfT<void> {
+template<> class OutsideFuture<void> final : public INotfT<void> {
+	FutureState s = FutureState::Running;
 	public:
 		OutsideFuture(){}
-		FutureState s = FutureState::Running;
+		void set(FutureState st){ s = st; }
+		void set(FutureState st, monoid<void> &&){ s = st; }
 		FutureState state() const override { return s; }
 		monoid<void> result() override { return {}; }
+		/// Marks future as completed
+		void completed(){ return set(FutureState::Completed); }
+		/// Marks future as running
+		Move<void> running(){
+			set(FutureState::Running);
+		}
 };
 
 template<typename T> Future<T> completed(T && t){
 	auto vf = std::make_shared<OutsideFuture<T>>();
-	vf->s = FutureState::Completed;
-	vf->r = std::move(t);
+	vf->completed(std::move(t));
 	return vf;
 }
 
 inline Future<void> completed(){
 	auto vf = std::make_shared<OutsideFuture<void>>();
-	vf->s = FutureState::Completed;
+	vf->completed();
 	return vf;
 }
 
