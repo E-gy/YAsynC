@@ -114,6 +114,9 @@ template<typename U, typename F> auto then(Future<U> f, F && map){
 template<typename U, typename F> auto operator>>(Future<U> f, F && map){
 	return then(f, std::move(map));
 }
+template<typename U, typename F> auto operator>>(std::shared_ptr<U> f, F && map){
+	return then(Future(f, *f), std::move(map));
+}
 
 template<typename V, typename F, typename... State> class GeneratorLGenerator : public IGeneratorT<V> {
 	bool d = false;

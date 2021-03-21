@@ -27,7 +27,8 @@ inline FutureState AFuture::state() const {
 
 template<typename T> inline Future<T>::Future(Genf<T> f) : variant(f) {}
 template<typename T> inline Future<T>::Future(Notf<T> f) : variant(f) {}
-template<typename T> template<typename V> inline Future<T>::Future(std::shared_ptr<V> f) : variant(std::static_pointer_cast<INotfT<T>>(f)) {}
+template<typename T> template<typename V> inline Future<T>::Future(const std::shared_ptr<V>& f, const IGenfT<T>&) : variant(std::static_pointer_cast<IGenfT<T>>(f)) {}
+template<typename T> template<typename V> inline Future<T>::Future(const std::shared_ptr<V>& f, const INotfT<T>&) : variant(std::static_pointer_cast<INotfT<T>>(f)) {}
 template<typename T> inline bool Future<T>::operator==(const Future& other) const { return variant == other.variant; }
 template<typename T> const Genf<T>* Future<T>::genf() const { return std::get_if<Genf<T>>(&variant); }
 template<typename T> const Notf<T>* Future<T>::notf() const { return std::get_if<Notf<T>>(&variant); }

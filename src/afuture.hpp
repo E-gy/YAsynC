@@ -81,8 +81,9 @@ template<typename T> class Future {
 		// inline Future(Variant v) : variant(v) {}
 		Future(Genf<T>);
 		Future(Notf<T>);
-		// template<typename T> inline Future(std::shared_ptr<T> f); //generated futures don't have many reasons for being subtyped, therefor prefer notified futures for implicit convenience construction
-		template<typename V> inline Future(std::shared_ptr<V> f);
+		template<typename V> Future(const std::shared_ptr<V>&, const IGenfT<T>&);
+		template<typename V> Future(const std::shared_ptr<V>&, const INotfT<T>&);
+		template<typename V> inline Future(const std::shared_ptr<V>& f) : Future(f, *f) {}
 		inline operator Variant() const { return variant; }
 		bool operator==(const Future&) const;
 		const Genf<T>* genf() const;
