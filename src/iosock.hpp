@@ -195,7 +195,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 				if(::epoll_ctl(engine->ioPo->rh, EPOLL_CTL_ADD, sock, &epm) < 0) return retSysError<ListenResult>("epoll add failed");
 			}
 			#endif
-			return engine->engine->launch(lambdagen([this, self = slf.lock()](const Yengine*, bool& done, int) -> std::variant<AFuture, movonly<void>>{
+			return ListenResult::Ok(engine->engine->launch(lambdagen([this, self = slf.lock()](const Yengine*, bool& done, int) -> std::variant<AFuture, movonly<void>>{
 				if(done) return movonly<void>();
 				auto stahp = [&](){
 					done = true;
@@ -273,8 +273,8 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 					if(::epoll_ctl(engine->ioPo->rh, EPOLL_CTL_MOD, sock, &epm) < 0) if(erracc(self, errno, "EPoll rearm failed")) return stahp();
 				}
 				#endif
-				return engif;
-			}, 0));
+				return AFuture(engif);
+			}, 0)));
 		}
 		/**
 		 * Initiates shutdown sequence.
