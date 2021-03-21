@@ -92,7 +92,7 @@ void ConnectingSocket::cancel(){
 	#endif
 }
 Future<ConnectionResult> ConnectingSocket::connest(){
-	return std::static_pointer_cast<IFutureT<ConnRedyResult>>(redy) >> ([=, self = slf.lock()](){
+	return redy >> ([=, self = slf.lock()](){
 		#ifdef _WIN32
 		if(::setsockopt(sock->sock(), SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT, NULL, 0)) return retSysNetError<ConnectionResult>("update context connect failed");
 		#endif

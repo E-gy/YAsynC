@@ -51,7 +51,7 @@ class IOI2Way {
 						done = true;
 						return ReadResult::Ok(data);
 					}
-					return *(share->notifi[R] = std::make_shared<OutsideFuture<void>>());
+					return AFuture(*(share->notifi[R] = std::make_shared<OutsideFuture<void>>()));
 				}, std::vector<char>()));
 			}
 			Future<WriteResult> _write(std::vector<char>&& data) override {

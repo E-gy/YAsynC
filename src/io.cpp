@@ -152,7 +152,7 @@ class FileResource : public IAIOResource {
 				{
 					auto rr = lazyEpollReg(false);
 					if(auto err = rr.err()) return ReadResult::Err(*err);
-					else if(*rr.ok()) return engif;
+					else if(*rr.ok()) return AFuture(engif);
 				}
 				if(engif->s == FutureState::Completed){
 					engif->s = FutureState::Running;
@@ -196,7 +196,7 @@ class FileResource : public IAIOResource {
 					return ReadResult::Err(*e);
 				}
 				#endif
-				return engif;
+				return AFuture(engif);
 			}, std::vector<char>()));
 		}
 		Future<WriteResult> _write(std::vector<char>&& data){
@@ -248,7 +248,7 @@ class FileResource : public IAIOResource {
 				{
 					auto rr = lazyEpollReg(true);
 					if(auto err = rr.err()) return WriteResult::Err(*err);
-					else if(*rr.ok()) return engif;
+					else if(*rr.ok()) return AFuture(engif);
 				}
 				if(engif->s == FutureState::Completed){
 					engif->s = FutureState::Running;
@@ -292,7 +292,7 @@ class FileResource : public IAIOResource {
 					return WriteResult::Err(*e);
 				}
 				#endif
-				return engif;
+				return AFuture(engif);
 			}, data));
 		}
 };
