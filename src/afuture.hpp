@@ -67,7 +67,7 @@ template<typename T> class Future {
 
 /**
  * A very special type. Effectively a dedicated optional.
- * When used in conjuctions with pipelining futures allows yielding of nothing (and in most cases indication of doneness).
+ * When used in conjuctions with pipelining futures allows yielding of nothing (and in most cases act as indication of doneness).
  */
 template<typename T> struct Maybe {
 	std::optional<T> t;
