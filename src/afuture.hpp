@@ -3,6 +3,7 @@
 #include "afustate.hpp"
 #include <memory>
 #include "variant.hpp"
+#include "monoid.hpp"
 
 namespace yasync {
 
@@ -16,40 +17,11 @@ template<typename T> using Genf = std::shared_ptr<IGenfT<T>>;
 using ANotf = std::shared_ptr<INotf>;
 template<typename T> using Notf = std::shared_ptr<INotfT<T>>;
 
-//DEPRECATED
-
-template<typename T> class movonly {
-	std::unique_ptr<T> t;
-	public:
-		movonly() : t() {}
-		movonly(T* pt) : t(pt) {}
-		movonly(const T& vt) : t(new T(vt)) {} 
-		movonly(T && vt) : t(new T(std::move(vt))) {}
-		~movonly() = default;
-		movonly(movonly && mov) noexcept { t = std::move(mov.t); }
-		movonly& operator=(movonly && mov) noexcept { t = std::move(mov.t); return *this; }
-		//no copy
-		movonly(const movonly& cpy) = delete;
-		movonly& operator=(const movonly& cpy) = delete;
-		auto operator*(){ return std::move(t.operator*()); }
-		auto operator->(){ return t.operator->(); }
-};
-template<> class movonly<void> {
-	std::unique_ptr<void*> t;
-	public:
-		movonly(){}
-		~movonly() = default;
-		movonly(movonly &&) noexcept {}
-		movonly& operator=(movonly &&) noexcept { return *this; }
-		//no copy (still, yeah!)
-		movonly(const movonly& cpy) = delete;
-		movonly& operator=(const movonly& cpy) = delete;
-};
-
-//
-
 class AFuture;
 template<typename T> class Future;
+
+/// Moved type for all types, which is void for void
+template<typename T> using Move = std::conditional<std::is_same<T, void>::value, void, T &&>::type;
 
 class AFuture {
 	public:
