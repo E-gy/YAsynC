@@ -14,7 +14,7 @@ class IOI2Way {
 	template<unsigned W> void notify(){
 		if(notifi[W]){
 			auto n = *notifi[W];
-			n->s = FutureState::Completed;
+			n->completed();
 			notivia[W]->notify(n);
 		}
 	}

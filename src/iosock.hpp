@@ -122,8 +122,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 		};
 		std::shared_ptr<OutsideFuture<ListenEvent>> engif;
 		void notify(ListenEvent e){
-			engif->r = e;
-			engif->s = FutureState::Completed;
+			engif->completed(e);
 			engine->engine->notify(engif);
 		}
 		void notify(ListenEventType e){ notify(ListenEvent{e, 0}); }
@@ -202,9 +201,8 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 					close();
 					return monoid<void>();
 				};
-				if(engif->s == FutureState::Completed){
-					auto event = engif->result();
-					engif->s = FutureState::Running;
+				if(engif->state() == FutureState::Completed){
+					auto event = engif->running();
 					switch(event->type){
 						case ListenEventType::Accept:{
 							#ifdef _WIN32
@@ -361,8 +359,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo> result<std::s
 		if(::connect(sock, candidate->ai_addr, candidate->ai_addrlen) == 0)
 		#endif
 		{
-			csock->redy->s = FutureState::Completed;
-			csock->redy->r = ConnectingSocket::ConnRedyResult::Ok();
+			csock->redy->completed(ConnectingSocket::ConnRedyResult::Ok());
 			break;
 		}
 		#ifdef _WIN32

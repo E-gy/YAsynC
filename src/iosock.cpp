@@ -67,21 +67,22 @@ std::string printSysNetError(const std::string& message){ return printSysError(m
 #endif
 
 void ConnectingSocket::notify(IOCompletionInfo inf){
-	redy->s = FutureState::Completed;
-	#ifdef _WIN32
-	if(inf.status) redy->r = ConnRedyResult::Ok();
-	else if(inf.lerr == ERROR_OPERATION_ABORTED) redy->r = ConnRedyResult::Err("Operation cancelled");
-	else redy->r = retSysNetError<ConnRedyResult>("ConnectEx async failed", inf.lerr);
-	#else
-	if((inf & EPOLLHUP) != 0) redy->r = ConnRedyResult::Err("Operation cancelled");
-	else if((inf & EPOLLERR) != 0){
-		int serr = 0;
-		::socklen_t serrlen = sizeof(serr);
-		if(::getsockopt(sock->rh, SOL_SOCKET, SO_ERROR, reinterpret_cast<void*>(&serr), &serrlen) < 0) redy->r = retSysNetError<ConnRedyResult>("connect async failed, and trying to understand why failed too");
-		else redy->r = retSysNetError<ConnRedyResult>("connect async failed", serr);
-	} else if((inf & EPOLLOUT) != 0) redy->r = ConnRedyResult::Ok();
-	else redy->r = retSysNetError<ConnRedyResult>("connect async scramble skedable");
-	#endif
+	redy->completed([&](){
+		#ifdef _WIN32
+		if(inf.status) return ConnRedyResult::Ok();
+		else if(inf.lerr == ERROR_OPERATION_ABORTED) return ConnRedyResult::Err("Operation cancelled");
+		else return retSysNetError<ConnRedyResult>("ConnectEx async failed", inf.lerr);
+		#else
+		if((inf & EPOLLHUP) != 0) return ConnRedyResult::Err("Operation cancelled");
+		else if((inf & EPOLLERR) != 0){
+			int serr = 0;
+			::socklen_t serrlen = sizeof(serr);
+			if(::getsockopt(sock->rh, SOL_SOCKET, SO_ERROR, reinterpret_cast<void*>(&serr), &serrlen) < 0) return retSysNetError<ConnRedyResult>("connect async failed, and trying to understand why failed too");
+			else return retSysNetError<ConnRedyResult>("connect async failed", serr);
+		} else if((inf & EPOLLOUT) != 0) return ConnRedyResult::Ok();
+		else return retSysNetError<ConnRedyResult>("connect async scramble skedable");
+		#endif
+	}());
 	engine->engine->notify(redy);
 }
 void ConnectingSocket::cancel(){

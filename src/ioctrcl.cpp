@@ -82,7 +82,7 @@ class CtrlC_ {
 					if(::sem_wait(&ctrlcEvent) < 0 && !stahp) continue;
 					#endif
 					if(stahp) break;
-					n->s = FutureState::Completed;
+					n->completed();
 					engine->notify(n);
 				}
 				#ifdef _WIN32
@@ -114,7 +114,7 @@ class CtrlC_ {
 			#endif
 			if(!notif.expired()){
 				auto t = notif.lock();
-				t->s = FutureState::Cancelled;
+				t->set(FutureState::Cancelled);
 				engine->cancelled<void>(t);
 			}
 			if(catcher.joinable()) catcher.join();
