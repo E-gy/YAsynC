@@ -65,6 +65,17 @@ template<typename T> class Future {
 		T result();
 };
 
+/**
+ * A very special type. Effectively a dedicated optional.
+ * When used in conjuctions with pipelining futures allows yielding of nothing (and in most cases indication of doneness).
+ */
+template<typename T> struct Maybe {
+	std::optional<T> t;
+	Maybe() = default;
+	Maybe(const T& v) : t(std::forward<T>(v)) {}
+	Maybe(T && v) : t(std::forward<T>(v)) {}
+};
+
 }
 
 namespace std {
