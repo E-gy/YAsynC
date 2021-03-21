@@ -26,25 +26,44 @@ template<typename T> Genf<T> defer(Generator<T> gen){
 	return std::make_shared<IGenfT<T>>(gen);
 }
 
+/**
+ * U → V
+ * F: U → V
+ */
 template<typename V, typename U, typename F> class ChainingGenerator : public IGeneratorT<V> {
-	Future<U> w;
-	bool reqd = false;
+	enum class State {
+		I, A, Fi
+	};
+	State state = State::I;
+	Future<U> awa;
 	F f;
 	public:
-		ChainingGenerator(Future<U> awa, F && map) : w(awa), f(std::move(map)) {}
-		bool done() const override { return reqd && w.state() == FutureState::Completed; }
+		ChainingGenerator(Future<U> w, F && map) : awa(w), f(std::move(map)) {}
+		bool done() const override { return state == State::Fi; }
 		Generesume<V> resume(const Yengine*) override {
-			if(w.state() == FutureState::Completed || !(reqd = !reqd)){
-				if constexpr (std::is_same<V, void>::value){
-					if constexpr (std::is_same<U, void>::value) f();
-					else f(w.result());
-					return monoid<void>();
-				} else if constexpr (std::is_same<U, void>::value) return monoid<V>(f());
-				else return monoid<V>(f(w.result()));
-			} else return w;
+			switch(state){
+				case State::I:
+					state = State::A;
+					return awa;
+				case State::A:
+					state = awa.state() == FutureState::Completed ? State::Fi : State::I;
+					if constexpr (std::is_same<V, void>::value){
+						if constexpr (std::is_same<U, void>::value) f();
+						else f(awa.result());
+						return monoid<void>();
+					} else if constexpr (std::is_same<U, void>::value) return monoid<V>(f());
+					else return monoid<V>(f(awa.result()));
+				case State::Fi: //Never
+				default:
+					return awa;
+			}
 		}
 };
 
+/**
+ * U → V...
+ * F: U → V^
+ */
 template<typename V, typename U, typename F> class ChainingWrappingGenerator : public IGeneratorT<V> {
 	enum class State {
 		I, A0, A1r, A1, Fi
@@ -70,19 +89,17 @@ template<typename V, typename U, typename F> class ChainingWrappingGenerator : p
 					state = State::A1;
 					return *nxt;
 				case State::A1: {
-					auto f1 = *nxt;
-					if(f1.state() == FutureState::Completed)
+					if(nxt->state() == FutureState::Completed)
 						if(awa.state() == FutureState::Completed) state = State::Fi;
 						else {
 							state = State::I;
 							nxt = std::nullopt;
 						}
 					else state = State::A1r;
-					return f1.result();
+					return nxt->result();
 				}
-				case State::Fi:
-					return (*nxt).result();
-				default: //never
+				case State::Fi: //Never
+				default:
 					return awa;
 			}
 		}
