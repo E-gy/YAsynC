@@ -80,7 +80,7 @@ template<typename T> class IGenfT : public IGenf {
 				},
 			}, gen->resume(engine));
 		}
-		movonly<T> result() override { return std::move(val); }
+		movonly<T> result(){ return std::move(val); }
 };
 
 }

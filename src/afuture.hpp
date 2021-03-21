@@ -48,27 +48,49 @@ template<> class movonly<void> {
 
 //
 
-class AFuture : public std::variant<AGenf, ANotf> {
+class AFuture;
+template<typename T> class Future;
+
+class AFuture {
 	public:
-		inline AFuture(AGenf f) : std::variant<AGenf, ANotf>(f) {}
-		inline AFuture(ANotf f) : std::variant<AGenf, ANotf>(f) {}
-		const AGenf* genf() const { return std::get_if<AGenf>(this); }
-		const ANotf* notf() const { return std::get_if<ANotf>(this); }
-		AGenf* genf(){ return std::get_if<AGenf>(this); }
-		ANotf* notf(){ return std::get_if<ANotf>(this); }
+		using Variant = std::variant<AGenf, ANotf>;
+	private:
+		Variant variant;
+	public:
+		inline AFuture(Variant v) : variant(v) {}
+		AFuture(AGenf);
+		AFuture(ANotf);
+		template<typename T> inline AFuture(Future<T>);
+		inline operator Variant() const { return variant; }
+		bool operator==(const AFuture&) const;
+		const AGenf* genf() const;
+		const ANotf* notf() const;
+		AGenf* genf();
+		ANotf* notf();
+		template<typename Visitor> decltype(auto) visit(Visitor &&) const;
+		template<typename Visitor> decltype(auto) visit(Visitor &&);
 		FutureState state() const;
 };
 
-template<typename T> class Future : public std::variant<Genf<T>, Notf<T>> {
+template<typename T> class Future {
 	public:
-		inline Future(Genf<T> f) : std::variant<Genf<T>, Notf<T>>(f) {}
-		inline Future(Notf<T> f) : std::variant<Genf<T>, Notf<T>>(f) {}
-		// template<typename T> inline Future(std::shared_ptr<T> f) : std::variant<Genf<T>, Notf<T>>(Genf<T>(f)) {} //generated futures don't have many reasons for being subtyped, therefor prefer notified futures for implicit convenience construction
-		template<typename T> inline Future(std::shared_ptr<T> f) : std::variant<Genf<T>, Notf<T>>(Notf<T>(f)) {}
-		const Genf<T>* genf() const { return std::get_if<Genf<T>>(this); }
-		const Notf<T>* notf() const { return std::get_if<Notf<T>>(this); }
-		Genf<T>* genf(){ return std::get_if<Genf<T>>(this); }
-		Notf<T>* notf(){ return std::get_if<Notf<T>>(this); }
+		using Variant = std::variant<Genf<T>, Notf<T>>;
+	private:
+		Variant variant;
+	public:
+		inline Future(Variant v) : variant(v) {}
+		Future(Genf<T>);
+		Future(Notf<T>);
+		// template<typename T> inline Future(std::shared_ptr<T> f); //generated futures don't have many reasons for being subtyped, therefor prefer notified futures for implicit convenience construction
+		template<typename V> inline Future(std::shared_ptr<V> f);
+		inline operator Variant() const { return variant; }
+		bool operator==(const Future&) const;
+		const Genf<T>* genf() const;
+		const Notf<T>* notf() const;
+		Genf<T>* genf();
+		Notf<T>* notf();
+		template<typename Visitor> decltype(auto) visit(Visitor &&) const;
+		template<typename Visitor> decltype(auto) visit(Visitor &&);
 		FutureState state() const;
 		movonly<T> result();
 };
@@ -77,7 +99,7 @@ template<typename T> class Future : public std::variant<Genf<T>, Notf<T>> {
 
 namespace std {
 	template<> struct hash<yasync::AFuture> {
-		inline size_t operator()(const yasync::AFuture& f) const { return std::hash<std::variant<yasync::AGenf, yasync::ANotf>>{}(f); }
+		inline size_t operator()(const yasync::AFuture& f) const { return std::hash<yasync::AFuture::Variant>{}(f); }
 	};
 	template<typename T> struct hash<yasync::Future<T>> {
 		inline size_t operator()(const yasync::Future<T>& f) const { return std::hash<std::variant<yasync::Genf<T>, yasync::Notf<T>>>{}(f); }

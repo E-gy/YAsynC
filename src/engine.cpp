@@ -48,7 +48,7 @@ void Yengine::threado(AFuture task){
 		if(auto naut = notifiDrop(task)) task = *naut; //chained future contains backref to the outside task and will steal the result itself like a good one
 		else return; //nothing to chain outside future with
 	} else if(task.state() > FutureState::Running) return; //Only suspended tasks are resumeable
-	std::visit(overloaded {
+	task.visit(overloaded {
 		[this](const ANotf&){
 			//No-op. Completed case handled above. At best a warning could be emitted idk.
 		},
@@ -79,7 +79,7 @@ void Yengine::threado(AFuture task){
 				}
 			}
 		},
-	}, task);
+	});
 }
 void Yengine::threadwork(){
 	while(auto w = work.pop()) threado(*w);
