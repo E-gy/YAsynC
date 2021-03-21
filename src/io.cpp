@@ -97,7 +97,7 @@ class FileResource : public IAIOResource {
 		~FileResource(){}
 		Future<ReadResult> _read(size_t bytes){
 			//self.get() == this   exists to memory-lock dangling IO resource to this lambda generator
-			return defer(lambdagen([this, self = slf.lock(), bytes](const Yengine*, bool& done, std::vector<char>& data) -> std::variant<AFuture, movonly<ReadResult>> {
+			return defer(lambdagen([this, self = slf.lock(), bytes](const Yengine*, bool& done, std::vector<char>& data) -> Generesume<ReadResult> {
 				if(done) return ReadResult::Ok(data);
 				#ifdef _WIN32 //TODO FIXME a UB lives somewhere in here, making itself known only on large data reads
 				if(engif->s == FutureState::Completed){
@@ -200,7 +200,7 @@ class FileResource : public IAIOResource {
 			}, std::vector<char>()));
 		}
 		Future<WriteResult> _write(std::vector<char>&& data){
-			return defer(lambdagen([this, self = slf.lock()](const Yengine*, bool& done, std::vector<char>& data) -> std::variant<AFuture, movonly<WriteResult>> {
+			return defer(lambdagen([this, self = slf.lock()](const Yengine*, bool& done, std::vector<char>& data) -> Generesume<WriteResult> {
 				if(data.empty()) done = true;
 				if(done) return WriteResult::Ok();
 				#ifdef _WIN32

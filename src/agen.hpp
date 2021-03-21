@@ -8,6 +8,8 @@ namespace yasync {
 
 class Yengine;
 
+template<typename T> using Generesume = std::variant<AFuture, movonly<T>>;
+
 /**
  * Generic asynchronous generator interface.
  * - `done` must always indicate whether the generation has completed (even prior to initial `resume` call)
@@ -29,7 +31,7 @@ template<typename T> class IGeneratorT {
 		 * @param engine @ref async engine to launch tasks in parallel
 		 * @returns @produces the next value if ready, the future this generator is awaiting for otherwise
 		 */
-		virtual std::variant<AFuture, movonly<T>> resume(const Yengine* engine) = 0;
+		virtual Generesume<T> resume(const Yengine* engine) = 0;
 };
 
 template<typename T> using Generator = std::shared_ptr<IGeneratorT<T>>;

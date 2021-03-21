@@ -220,7 +220,7 @@ template<typename PatIt> Future<IAIOResource::ReadResult> IAIOResource::read_(co
 		for(; j < readbuff.size() && pat != patEnd; j++, pat++) if(readbuff[j] != *pat) break;
 		if(pat == patEnd) return read<std::vector<char>>(j);
 	}
-	return defer(lambdagen([this, self = slf.lock(), pattern = std::vector<char>(patBegin, patEnd)](const Yengine*, bool& done, std::optional<Future<IAIOResource::ReadResult>>& awao) -> std::variant<AFuture, movonly<IAIOResource::ReadResult>> {
+	return defer(lambdagen([this, self = slf.lock(), pattern = std::vector<char>(patBegin, patEnd)](const Yengine*, bool& done, std::optional<Future<IAIOResource::ReadResult>>& awao) -> Generesume<IAIOResource::ReadResult> {
 		if(done) return IAIOResource::ReadResult::Err("Result already submitted!");
 		if(awao){
 			auto gmd = *awao;

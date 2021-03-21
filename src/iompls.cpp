@@ -42,7 +42,7 @@ class IOI2Way {
 			void notify(IOCompletionInfo) override {}
 			void cancel() override {}
 			Future<ReadResult> _read(size_t bytes = 0) override {
-				return defer(lambdagen([this, self = slf.lock(), bytes](const Yengine*, bool& done, std::vector<char> data) -> std::variant<AFuture, movonly<ReadResult>> {
+				return defer(lambdagen([this, self = slf.lock(), bytes](const Yengine*, bool& done, std::vector<char> data) -> Generesume<ReadResult> {
 					if(done) return ReadResult::Ok(data);
 					share->notifi[R] = std::nullopt;
 					std::unique_lock lk(share->locks[R]);
