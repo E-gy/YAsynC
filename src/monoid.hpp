@@ -3,9 +3,8 @@
 template<typename T> class monoid {
 	T t;
 	monoid() = default;
-	monoid(T v) : t(v) {}
-	monoid(const T& v) : t(v) {} 
-	monoid(T && v) : t(std::move(v)) {}
+	monoid(const T& v) : t(std::forward(v)) {} 
+	monoid(T && v) : t(std::forward(v)) {}
 	operator T&(){ return t; }
 	T && move(){ return std::move(t); }
 };
