@@ -1,6 +1,6 @@
 #pragma once
 
-template<typename T> class monoid {
+template<typename T> struct monoid {
 	T t;
 	monoid() = default;
 	monoid(const T& v) : t(std::forward(v)) {} 
