@@ -61,10 +61,8 @@ template<typename V, typename U, typename F> class ChainingWrappingGenerator : p
 					state = State::A0;
 					return awa;
 				case State::A0: {
-					Future<V> f1;
-					if constexpr (std::is_same<U, void>::value) f1 = gf();
-					else f1 = gf(*awa.result());
-					nxt = f1;
+					if constexpr (std::is_same<U, void>::value) nxt = gf();
+					else nxt = gf(*awa.result());
 					[[fallthrough]];
 				}
 				case State::A1r:
