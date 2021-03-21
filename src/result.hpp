@@ -13,6 +13,7 @@ template<typename S, typename E> class result {
 	public:
 		using OK = S;
 		using ERR = E;
+		result() = default;
 		result(const S& ok) : res(ok) {}
 		result(const E& err) : res(err) {}
 		result(S && ok) : res(std::forward<S>(ok)) {}
@@ -57,6 +58,7 @@ template<typename T> class result<T, T> {
 	public:
 		using OK = T;
 		using ERR = T;
+		result() = default;
 		bool isOk() const { return okay; }
 		bool isErr() const { return !okay; }
 		const T* ok() const { return isOk() ? &thing : nullptr; }
@@ -161,6 +163,7 @@ template<> class result<void, void> {
 	public:
 		using OK = void;
 		using ERR = void;
+		result() = default;
 		bool isOk() const { return okay; }
 		bool isErr() const { return !okay; }
 		operator bool() const { return isOk(); }
