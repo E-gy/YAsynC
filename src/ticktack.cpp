@@ -1,23 +1,23 @@
 #include "ticktack.hpp"
 
 #include <optional>
-#include "daemons.hpp"
 
 namespace yasync {
 
-TickTack::TickTack() : stahp(std::make_shared<std::atomic_bool>(false)) {
-	Daemons::launch([this](){ threadwork(); });
+TickTack::TickTack() : stahp(false) {
+	worker = std::thread([this](){ threadwork(); });
 }
 
 void TickTack::shutdown(){
 	std::set<El> rent;
 	{
 		std::unique_lock lok(lock);
-		*stahp = true;
+		stahp = true;
 		cvStahp.notify_one();
 		std::swap(rent, ent);
 	}
 	for(auto t = rent.begin(); t != rent.end(); t++) t->f(t->id, true);
+	worker.join();
 }
 
 TickTack::Id TickTack::start(const TimePoint& t, const Duration& d, Callback && f){
@@ -37,16 +37,15 @@ void TickTack::stop(Id id){
 }
 
 void TickTack::threadwork(){
-	auto stahp = this->stahp;
-	auto next = [stahp, this]() -> std::optional<El> {
-		if(*stahp) return std::nullopt;
+	auto next = [this]() -> std::optional<El> {
+		if(stahp) return std::nullopt;
 		std::unique_lock lok(lock);
 		auto next = ent.begin();
 		if(next == ent.end()) return std::nullopt;
 		if(next->t > Clock::now()) return std::nullopt;
 		return std::move(ent.extract(next).value());
 	};
-	while(!*stahp){
+	while(!stahp){
 		while(auto n = next()){
 			auto tik = std::move(*n);
 			tik.f(tik.id, false);
@@ -56,9 +55,9 @@ void TickTack::threadwork(){
 				ent.emplace(std::move(tik));
 			}
 		}
-		if(!*stahp){
+		if(!stahp){
 			std::unique_lock lok(lock);
-			if(cvStahp.wait_for(lok, std::chrono::milliseconds(5)) == std::cv_status::no_timeout) return;
+			cvStahp.wait_for(lok, std::chrono::milliseconds(5));
 		}
 	}
 }
