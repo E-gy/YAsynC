@@ -20,9 +20,6 @@ template<typename T> using Notf = std::shared_ptr<INotfT<T>>;
 class AFuture;
 template<typename T> class Future;
 
-/// Moved type for all types, which is void for void
-template<typename T> using Move = typename std::add_rvalue_reference<T>::type;
-
 class AFuture {
 	public:
 		using Variant = std::variant<AGenf, ANotf>;
@@ -65,7 +62,7 @@ template<typename T> class Future {
 		template<typename Visitor> decltype(auto) visit(Visitor &&) const;
 		template<typename Visitor> decltype(auto) visit(Visitor &&);
 		FutureState state() const;
-		Move<T> result();
+		T result();
 };
 
 }

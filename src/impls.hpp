@@ -45,7 +45,7 @@ template<typename T> class OutsideFuture final : public INotfT<T> {
 		/// Marks future as completed with result
 		void completed(T && rr){ return set(FutureState::Completed, std::move(rr)); }
 		/// Marks future as running, moves previous result
-		Move<T> running(){
+		T running(){
 			set(FutureState::Running);
 			return std::move(r);
 		}
@@ -62,7 +62,7 @@ template<> class OutsideFuture<void> final : public INotfT<void> {
 		/// Marks future as completed
 		void completed(){ return set(FutureState::Completed); }
 		/// Marks future as running
-		Move<void> running(){
+		void running(){
 			set(FutureState::Running);
 		}
 };
