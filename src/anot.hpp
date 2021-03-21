@@ -23,7 +23,7 @@ template<typename T> class INotfT : public INotf {
 		 * May return <nothing> if the future is in invalid state
 		 * @returns @produces
 		 */
-		virtual Move<T> result() = 0;
+		virtual monoid<T> result() = 0;
 };
 
 }

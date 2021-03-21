@@ -44,9 +44,10 @@ template<typename T> inline FutureState Future<T>::state() const {
 }
 template<typename T> inline Move<T> Future<T>::result(){
 	return visit(overloaded {
-		[](Genf<T>& f){ return std::move(f->result()); },
-		[](Notf<T>& f){ return std::move(f->result()); },
-	});
+		[](Genf<T>& f){ return f->result(); },
+		[](Notf<T>& f){ return f->result(); },
+	}).move();
 }
+template<> inline Move<void> Future<void>::result(){}
 
 }

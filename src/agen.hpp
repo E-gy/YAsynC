@@ -66,7 +66,7 @@ template<typename T> class IGenfT : public IGenf {
 	protected:
 		const Generator<T> gen;
 		FutureState s = FutureState::Suspended;
-		T val;
+		monoid<T> val;
 	public:
 		IGenfT(Generator<T> g) : gen(g) {}
 		// Generator
@@ -74,7 +74,7 @@ template<typename T> class IGenfT : public IGenf {
 		std::optional<AFuture> resume(const Yengine* engine) override {
 			return std::visit(overloaded {
 				[this](monoid<T> && result) -> std::optional<AFuture> {
-					val = result.move();
+					val = std::move(result);
 					return std::nullopt;
 				},
 				[this](AFuture awa) -> std::optional<AFuture> {
@@ -82,28 +82,7 @@ template<typename T> class IGenfT : public IGenf {
 				},
 			}, gen->resume(engine));
 		}
-		Move<T> result(){ return std::move(val); }
-};
-template<> class IGenfT<void> : public IGenf {
-	using T = void;
-	protected:
-		const Generator<T> gen;
-		FutureState s = FutureState::Suspended;
-	public:
-		IGenfT(Generator<T> g) : gen(g) {}
-		// Generator
-		bool done() const override { return gen->done(); }
-		std::optional<AFuture> resume(const Yengine* engine) override {
-			return std::visit(overloaded {
-				[this](monoid<T> &&) -> std::optional<AFuture> {
-					return std::nullopt;
-				},
-				[this](AFuture awa) -> std::optional<AFuture> {
-					return awa;
-				},
-			}, gen->resume(engine));
-		}
-		Move<T> result(){}
+		monoid<T> result(){ return std::move(val); }
 };
 
 }

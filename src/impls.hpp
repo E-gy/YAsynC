@@ -35,7 +35,7 @@ template<typename T> class OutsideFuture : public INotfT<T> {
 		FutureState s = FutureState::Running;
 		FutureState state() const override { return s; }
 		T r;
-		Move<T> result() override { return std::move(r); }
+		monoid<T> result() override { return std::move(r); }
 };
 
 template<> class OutsideFuture<void> : public INotfT<void> {
@@ -43,7 +43,7 @@ template<> class OutsideFuture<void> : public INotfT<void> {
 		OutsideFuture(){}
 		FutureState s = FutureState::Running;
 		FutureState state() const override { return s; }
-		Move<void> result() override {}
+		monoid<void> result() override { return {}; }
 };
 
 template<typename T> Future<T> completed(T && t){
@@ -67,7 +67,7 @@ template<typename T> class AggregateFuture : public INotfT<std::vector<T>> {
 		std::weak_ptr<AggregateFuture> slf;
 		AggregateFuture() = default;
 		FutureState state() const override { return bal > 0 ? FutureState::Running : FutureState::Completed; }
-		Move<std::vector<T>> result() override { return std::move(results); }
+		monoid<std::vector<T>> result() override { return std::move(results); }
 		AggregateFuture& add(Yengine* engine, Future<T> f){
 			{
 				std::unique_lock lok(synch);
@@ -89,7 +89,7 @@ template<> class AggregateFuture<void> : public INotfT<void> {
 		std::weak_ptr<AggregateFuture> slf;
 		AggregateFuture() = default;
 		FutureState state() const override { return bal > 0 ? FutureState::Running : FutureState::Completed; }
-		Move<void> result() override {}
+		monoid<void> result() override { return {}; }
 		AggregateFuture& add(Yengine* engine, Future<void> f){
 			{
 				std::unique_lock lok(synch);
