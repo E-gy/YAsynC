@@ -102,7 +102,7 @@ class FileResource : public IAIOResource {
 				#ifdef _WIN32 //TODO FIXME a UB lives somewhere in here, making itself known only on large data reads
 				if(engif->s == FutureState::Completed){
 					engif->s = FutureState::Running;
-					IOCompletionInfo result = *engif->r;
+					IOCompletionInfo result = engif->r;
 					if(!result.status) switch(result.lerr){
 						case ERROR_HANDLE_EOF:
 							done = true;
@@ -156,7 +156,7 @@ class FileResource : public IAIOResource {
 				}
 				if(engif->s == FutureState::Completed){
 					engif->s = FutureState::Running;
-					int leve = *engif->r;
+					int leve = engif->r;
 					switch(leve){
 						case EPOLLIN: {
 							int transferred;
@@ -206,7 +206,7 @@ class FileResource : public IAIOResource {
 				#ifdef _WIN32
 				if(engif->s == FutureState::Completed){
 					engif->s = FutureState::Running;
-					IOCompletionInfo result = *engif->r;
+					IOCompletionInfo result = engif->r;
 					if(!result.status) switch(result.lerr){
 						case ERROR_OPERATION_ABORTED:
 							done = true;
@@ -252,7 +252,7 @@ class FileResource : public IAIOResource {
 				}
 				if(engif->s == FutureState::Completed){
 					engif->s = FutureState::Running;
-					int leve = *engif->r;
+					int leve = engif->r;
 					switch(leve){
 						case EPOLLOUT: {
 							int transferred;
@@ -350,7 +350,7 @@ Future<IAIOResource::WriteResult> IAIOResource::Writer::flush(){
 	std::vector<char> buff;
 	std::swap(buff, buffer);
 	return lflush = (lflush >> [res = resource, buff](auto lr){
-		if(lr.err()) return completed(lr);
+		if(lr.err()) return completed(std::move(lr));
 		else return res->write(buff);
 	});
 }

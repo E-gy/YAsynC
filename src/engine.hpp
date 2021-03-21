@@ -37,10 +37,10 @@ template<typename V, typename U, typename F> class ChainingGenerator : public IG
 			if(w.state() == FutureState::Completed || !(reqd = !reqd)){
 				if constexpr (std::is_same<V, void>::value){
 					if constexpr (std::is_same<U, void>::value) f();
-					else f(*w.result());
+					else f(w.result());
 					return monoid<void>();
 				} else if constexpr (std::is_same<U, void>::value) return monoid<V>(f());
-				else return monoid<V>(f(*w.result()));
+				else return monoid<V>(f(w.result()));
 			} else return w;
 		}
 };
@@ -63,7 +63,7 @@ template<typename V, typename U, typename F> class ChainingWrappingGenerator : p
 					return awa;
 				case State::A0: {
 					if constexpr (std::is_same<U, void>::value) nxt = gf();
-					else nxt = gf(*awa.result());
+					else nxt = gf(awa.result());
 					[[fallthrough]];
 				}
 				case State::A1r:
@@ -107,7 +107,7 @@ template<typename U, typename F> auto then(Future<U> f, F && map){
 		using V = std::decay_t<decltype(map())>;
 		return then_spec(f, std::move(map), _typed<V>{});
 	} else {
-		using V = std::decay_t<decltype(map(*f.result()))>;
+		using V = std::decay_t<decltype(map(f.result()))>;
 		return then_spec(f, std::move(map), _typed<V>{});
 	}
 }

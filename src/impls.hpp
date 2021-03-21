@@ -34,8 +34,8 @@ template<typename T> class OutsideFuture : public INotfT<T> {
 		OutsideFuture(){}
 		FutureState s = FutureState::Running;
 		FutureState state() const override { return s; }
-		monoid<T> r;
-		Move<T> result() override { return r.move(); }
+		T r;
+		Move<T> result() override { return std::move(r); }
 };
 
 template<> class OutsideFuture<void> : public INotfT<void> {
@@ -46,10 +46,10 @@ template<> class OutsideFuture<void> : public INotfT<void> {
 		Move<void> result() override {}
 };
 
-template<typename T> Future<T> completed(const T& t){
+template<typename T> Future<T> completed(T && t){
 	auto vf = std::make_shared<OutsideFuture<T>>();
 	vf->s = FutureState::Completed;
-	vf->r = t;
+	vf->r = std::move(t);
 	return vf;
 }
 

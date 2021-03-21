@@ -226,11 +226,11 @@ template<typename PatIt> Future<IAIOResource::ReadResult> IAIOResource::read_(co
 			auto gmd = *awao;
 			if(gmd.state() == FutureState::Completed){
 				auto res = gmd.result();
-				if(auto err = res->err()){
+				if(auto err = res.err()){
 					done = true;
 					return IAIOResource::ReadResult::Err(*err);
 				}
-				auto rd = *res->ok();
+				auto rd = *res.ok();
 				if(rd.empty()){
 					done = true;
 					return IAIOResource::ReadResult::Err("Reached EOF and didn't meet pattern!");
@@ -244,7 +244,7 @@ template<typename PatIt> Future<IAIOResource::ReadResult> IAIOResource::read_(co
 			for(; j < readbuff.size() && pat != pattern.end(); j++, pat++) if(readbuff[j] != *pat) break;
 			if(pat == pattern.end()){
 				done = true;
-				return *read<std::vector<char>>(j).result();
+				return read<std::vector<char>>(j).result();
 			}
 		}
 		auto gmd = _read(1);
