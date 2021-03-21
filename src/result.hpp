@@ -30,18 +30,18 @@ template<typename S, typename E> class result {
 		operator bool() const { return isOk(); }
 		template<typename U, typename F> result<U, E> mapOk_(F && f) const { if(auto r = std::get_if<S>(&res)) return result<U, E>::Ok(f(*r)); else return result<U, E>::Err(*err()); }
 		template<typename V, typename F> result<S, V> mapError_(F && f) const { if(auto r = std::get_if<E>(&res)) return result<S, V>::Err(f(*r)); else return result<S, V>::Ok(*ok()); }
-		template<typename F> auto mapOk(F && f) const {
+		template<typename F> decltype(auto) mapOk(F && f) const {
 			using U = std::decay_t<decltype(f(*std::get_if<S>(&res)))>;
 			return mapOk_<U, F>(std::move(f));
 		}
-		template<typename F> auto mapError(F && f) const {
+		template<typename F> decltype(auto) mapError(F && f) const {
 			using V = std::decay_t<decltype(f(*std::get_if<E>(&res)))>;
 			return mapError_<V, F>(std::move(f));
 		}
-		template<typename FS, typename FE> auto ifElse(FS && fs, FE && fe) const { return isOk() ? fs(*ok()) : fe(*err()); }
-		template<typename FS, typename FE> auto ifElse(FS && fs, FE && fe){ return isOk() ? fs(std::move(*ok())) : fe(std::move(*err())); }
-		template<typename F> auto operator>>(F && f) const { return f(*this); }
-		template<typename F> auto operator>>(F && f){ return f(std::move(*this)); }
+		template<typename FS, typename FE> decltype(auto) ifElse(FS && fs, FE && fe) const { return isOk() ? fs(*ok()) : fe(*err()); }
+		template<typename FS, typename FE> decltype(auto) ifElse(FS && fs, FE && fe){ return isOk() ? fs(std::move(*ok())) : fe(std::move(*err())); }
+		template<typename F> decltype(auto) operator>>(F && f) const { return f(*this); }
+		template<typename F> decltype(auto) operator>>(F && f){ return f(std::move(*this)); }
 	public:
 		static result Ok(const S& ok){ return result(ok); }
 		static result Err(const E& err){ return result(err); }
@@ -70,18 +70,18 @@ template<typename T> class result<T, T> {
 		operator bool() const { return isOk(); }
 		template<typename U, typename F> result<U, T> mapOk_(F && f) const { if(isOk()) return result<U, T>::Ok(f(thing)); else return result<U, T>::Err(*err()); }
 		template<typename V, typename F> result<T, V> mapError_(F && f) const { if(isErr()) return result<T, V>::Err(f(thing)); else return result<T, V>::Ok(*ok()); }
-		template<typename F> auto mapOk(F && f) const {
+		template<typename F> decltype(auto) mapOk(F && f) const {
 			using U = std::decay_t<decltype(f(thing))>;
 			return mapOk_<U, F>(std::move(f));
 		}
-		template<typename F> auto mapError(F && f) const {
+		template<typename F> decltype(auto) mapError(F && f) const {
 			using V = std::decay_t<decltype(f(thing))>;
 			return mapError_<V, F>(std::move(f));
 		}
-		template<typename FS, typename FE> auto ifElse(FS && fs, FE && fe) const { return isOk() ? fs(thing) : fe(thing); }
-		template<typename FS, typename FE> auto ifElse(FS && fs, FE && fe){ return isOk() ? fs(std::move(thing)) : fe(std::move(thing)); }
-		template<typename F> auto operator>>(F && f) const { return f(*this); }
-		template<typename F> auto operator>>(F && f){ return f(std::move(*this)); }
+		template<typename FS, typename FE> decltype(auto) ifElse(FS && fs, FE && fe) const { return isOk() ? fs(thing) : fe(thing); }
+		template<typename FS, typename FE> decltype(auto) ifElse(FS && fs, FE && fe){ return isOk() ? fs(std::move(thing)) : fe(std::move(thing)); }
+		template<typename F> decltype(auto) operator>>(F && f) const { return f(*this); }
+		template<typename F> decltype(auto) operator>>(F && f){ return f(std::move(*this)); }
 	public:
 		static result Ok(const T& ok){ return result(true, ok); }
 		static result Err(const T& err){ return result(false, err); }
@@ -104,18 +104,18 @@ template<typename S> class result<S, void> {
 		std::optional<S> okOpt() const { return okay; }
 		template<typename U, typename F> result<U, void> mapOk_(F && f) const { if(auto r = ok()) return result<U, void>::Ok(f(*r)); else return result<U, void>::Err(); }
 		template<typename V, typename F> result<S, V> mapError_(F && f) const { if(isErr()) return result<S, V>::Err(f()); else return result<S, V>::Ok(*ok()); }
-		template<typename F> auto mapOk(F && f) const {
+		template<typename F> decltype(auto) mapOk(F && f) const {
 			using U = std::decay_t<decltype(f(*okay))>;
 			return mapOk_<U, F>(std::move(f));
 		}
-		template<typename F> auto mapError(F && f) const {
+		template<typename F> decltype(auto) mapError(F && f) const {
 			using V = std::decay_t<decltype(f())>;
 			return mapError_<V, F>(std::move(f));
 		}
-		template<typename FS, typename FE> auto ifElse(FS && fs, FE && fe) const { return isOk() ? fs(*ok()) : fe(); }
-		template<typename FS, typename FE> auto ifElse(FS && fs, FE && fe){ return isOk() ? fs(std::move(*ok())) : fe(); }
-		template<typename F> auto operator>>(F && f) const { return f(*this); }
-		template<typename F> auto operator>>(F && f){ return f(std::move(*this)); }
+		template<typename FS, typename FE> decltype(auto) ifElse(FS && fs, FE && fe) const { return isOk() ? fs(*ok()) : fe(); }
+		template<typename FS, typename FE> decltype(auto) ifElse(FS && fs, FE && fe){ return isOk() ? fs(std::move(*ok())) : fe(); }
+		template<typename F> decltype(auto) operator>>(F && f) const { return f(*this); }
+		template<typename F> decltype(auto) operator>>(F && f){ return f(std::move(*this)); }
 	public:
 		static result Ok(const S& ok){ return result(ok); }
 		static result Ok(S && ok){ return result(std::forward<S>(ok)); }
@@ -137,18 +137,18 @@ template<typename E> class result<void, E> {
 		std::optional<E> errOpt() const { return error; }
 		template<typename U, typename F> result<U, E> mapOk_(F && f) const { if(isOk()) return result<U, E>::Ok(f()); else return result<U, E>::Err(*err()); }
 		template<typename V, typename F> result<void, V> mapError_(F && f) const { if(auto r = err()) return result<void, V>::Err(f(*r)); else return result<void, V>::Ok(); }
-		template<typename F> auto mapOk(F && f) const {
+		template<typename F> decltype(auto) mapOk(F && f) const {
 			using U = std::decay_t<decltype(f())>;
 			return mapOk_<U, F>(std::move(f));
 		}
-		template<typename F> auto mapError(F && f) const {
+		template<typename F> decltype(auto) mapError(F && f) const {
 			using V = std::decay_t<decltype(f(*err))>;
 			return mapError_<V, F>(std::move(f));
 		}
-		template<typename FS, typename FE> auto ifElse(FS && fs, FE && fe) const { return isOk() ? fs() : fe(*err()); }
-		template<typename FS, typename FE> auto ifElse(FS && fs, FE && fe){ return isOk() ? fs() : fe(std::move(*err())); }
-		template<typename F> auto operator>>(F && f) const { return f(*this); }
-		template<typename F> auto operator>>(F && f){ return f(std::move(*this)); }
+		template<typename FS, typename FE> decltype(auto) ifElse(FS && fs, FE && fe) const { return isOk() ? fs() : fe(*err()); }
+		template<typename FS, typename FE> decltype(auto) ifElse(FS && fs, FE && fe){ return isOk() ? fs() : fe(std::move(*err())); }
+		template<typename F> decltype(auto) operator>>(F && f) const { return f(*this); }
+		template<typename F> decltype(auto) operator>>(F && f){ return f(std::move(*this)); }
 	public:
 		static result Ok(){ return result(); }
 		static result Err(const E& err){ return result(err); }
@@ -166,15 +166,15 @@ template<> class result<void, void> {
 		operator bool() const { return isOk(); }
 		template<typename U, typename F> result<U, void> mapOk_(F && f) const { if(isOk()) return result<U, void>::Ok(f()); else return result<U, void>::Err(); }
 		template<typename V, typename F> result<void, V> mapError_(F && f) const { if(isErr()) return result<void, V>::Err(f()); else return result<void, V>::Ok(); }
-		template<typename F> auto mapOk(F && f) const {
+		template<typename F> decltype(auto) mapOk(F && f) const {
 			using U = std::decay_t<decltype(f())>;
 			return mapOk_<U, F>(std::move(f));
 		}
-		template<typename F> auto mapError(F && f) const {
+		template<typename F> decltype(auto) mapError(F && f) const {
 			using V = std::decay_t<decltype(f())>;
 			return mapError_<V, F>(std::move(f));
 		}
-		template<typename FS, typename FE> auto ifElse(FS && fs, FE && fe) const { return isOk() ? fs() : fe(); }
+		template<typename FS, typename FE> decltype(auto) ifElse(FS && fs, FE && fe) const { return isOk() ? fs() : fe(); }
 	public:
 		static result Ok(){ return result(true); }
 		static result Err(){ return result(false); }
@@ -185,7 +185,7 @@ template<> class result<void, void> {
  */
 namespace magikop {
 
-template<typename FS, typename FE> inline auto operator|(FS && fs, FE && fe){
+template<typename FS, typename FE> inline decltype(auto) operator|(FS && fs, FE && fe){
 	return [fs = std::move(fs), fe = std::move(fe)](auto r){ return r.ifElse(std::move(fs), std::move(fe)); };
 }
 
