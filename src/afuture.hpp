@@ -2,6 +2,7 @@
 
 #include "afustate.hpp"
 #include <memory>
+#include <optional>
 #include "variant.hpp"
 #include "monoid.hpp"
 
