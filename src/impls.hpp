@@ -3,7 +3,6 @@
 #include "agen.hpp"
 #include "future.hpp"
 
-#include "daemons.hpp"
 #include "engine.hpp"
 
 namespace yasync {
