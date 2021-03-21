@@ -6,6 +6,7 @@
 #include <memory>
 #include <any>
 #include <tuple>
+#include <thread>
 
 #include "future.hpp"
 #include "threadsafequeue.hpp"
@@ -175,6 +176,7 @@ class Yengine {
 	 */
 	std::unordered_map<AFuture, AGenf> notifications;
 	unsigned workers;
+	std::vector<std::thread> workets;
 	public:
 		Yengine(unsigned threads);
 		void wle();

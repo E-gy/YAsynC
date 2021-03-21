@@ -1,13 +1,12 @@
 #include "engine.hpp"
 
-#include "daemons.hpp"
-
 namespace yasync {
 
 Yengine::Yengine(unsigned threads) : workers(threads) {
 	work.cvIdle = &condWLE;
 	work.thresIdle = workers;
-	for(unsigned i = 0; i < workers; i++) Daemons::launch([this](){ this->threadwork(); });
+	workets.resize(workers);
+	for(unsigned i = 0; i < workers; i++) workets[i] = std::thread([this](){ this->threadwork(); });
 }
 
 void Yengine::wle(){
@@ -16,6 +15,7 @@ void Yengine::wle(){
 		while(work.currentIdle() < work.thresIdle || !notifications.empty()) condWLE.wait(lock);
 	}
 	work.close();
+	for(unsigned i = 0; i < workers; i++) workets[i].join();
 }
 
 void Yengine::execute(const AGenf& gf){
