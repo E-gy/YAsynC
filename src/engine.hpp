@@ -185,7 +185,7 @@ class Yengine {
 		 * @param f future to execute
 		 * @returns f
 		 */ 
-		template<typename T> inline auto execute(const Genf<T>& f){
+		template<typename T> inline decltype(auto) execute(const Genf<T>& f){
 			execute(std::static_pointer_cast<IGenf>(f));
 			return f;
 		}
@@ -203,7 +203,7 @@ class Yengine {
 		 * !!!USE CANCELLATION WITH CARE!!!
 		 * On cancellation the entire awaited chain is yeeted into oblivion.
 		 */
-		template<typename T> inline auto notify(const Notf<T>& f){
+		template<typename T> inline decltype(auto) notify(const Notf<T>& f){
 			notify(std::static_pointer_cast<INotf>(f));
 			return f;
 		}
@@ -215,6 +215,15 @@ class Yengine {
 		 * _It is just an alias for notify._
 		 */
 		template<typename T> inline void cancelled(const Notf<T>& f){ notify(f); }
+		/**
+		 * Submits generative future for execution.
+		 * No-op if the future is not generative.
+		 * @see Yengine::execute
+		 */
+		template<typename T> inline decltype(auto) operator<<=(const Future<T>& f){
+			if(auto gf = f.genf()) execute(*gf);
+			return f;
+		}
 	private:
 		std::condition_variable condWLE;
 		std::mutex notificationsLock;
@@ -229,16 +238,13 @@ class Yengine {
  * @see Yengine::execute
  * @returns f
  */
-template<typename T> inline auto operator<<=(Yengine* const engine, const Genf<T>& gf){ return engine->execute(gf); }
+template<typename T> inline decltype(auto) operator<<=(Yengine* engine, const Genf<T>& gf){ return engine->execute(gf); }
 
 /**
  * Submits generative future for execution.
  * No-op if the future is not generative.
  * @see Yengine::execute
  */
-template<typename T> inline auto operator<<=(Yengine* const engine, const Future<T>& f){
-	if(auto gf = f.genf()) engine->execute(*gf);
-	return f;
-}
+template<typename T> inline decltype(auto) operator<<=(Yengine* engine, const Future<T>& f){ return *engine <<= f; }
 
 }
