@@ -2,6 +2,7 @@
 
 #include "impls.hpp"
 #include "io.hpp"
+#include <atomic>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -29,13 +30,14 @@ void glCtrlcHandler(int sig);
 #endif
 
 class CtrlC_ {
-	bool stahp = false;
+	std::atomic_bool stahp = false;
 	#ifdef _WIN32
 	ResourceHandle ctrlcEvent = INVALID_HANDLE_VALUE;
 	#else
 	::sem_t ctrlcEvent;
 	#endif
 	std::weak_ptr<OutsideFuture<void>> notif;
+	std::thread catcher;
 	CtrlC_(){};
 	public:
 		static CtrlC_* INSTANCE(){
@@ -72,7 +74,7 @@ class CtrlC_ {
 			::sigaction(SIGINT, &sa, NULL);
 			#endif
 			std::shared_ptr<OutsideFuture<void>> n(new OutsideFuture<void>());
-			Daemons::launch([=](){
+			catcher = std::thread([=](){
 				while(true){
 					#ifdef _WIN32
 					::WaitForSingleObject(ctrlcEvent, INFINITE);
@@ -115,6 +117,7 @@ class CtrlC_ {
 				t->s = FutureState::Cancelled;
 				engine->cancelled<void>(t);
 			}
+			if(catcher.joinable()) catcher.join();
 		}
 };
 
