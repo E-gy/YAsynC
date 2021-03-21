@@ -21,7 +21,7 @@ class AFuture;
 template<typename T> class Future;
 
 /// Moved type for all types, which is void for void
-template<typename T> using Move = typename std::add_lvalue_reference<T>::type;
+template<typename T> using Move = typename std::add_rvalue_reference<T>::type;
 
 class AFuture {
 	public:
