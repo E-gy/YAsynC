@@ -26,6 +26,19 @@ template<typename T> Genf<T> defer(Generator<T> gen){
 	return std::make_shared<IGenfT<T>>(gen);
 }
 
+/*
+ * Generators indicators
+ * `T` a *t*hing
+ * `T^` future thing(s)
+ * `T?` maybe a thing
+ * `T...` a few things (superscripts can be used to indicate count conservation)
+ * ⇒ `T?..` maybe a few things
+ * `→` direct
+ * `↠` explosion
+ * `↣` implosion
+ * PS: Futures _can_ always yield more than one thing by design (obviously it requires cooperation on both sides). Therefor ~~explosion~~ many-yield of `T^` into `T...` is implicit and will not be denoted by the arrows.
+ */
+
 /**
  * U → V
  * F: U → V
