@@ -190,18 +190,18 @@ class IAIOResource : public IResource {
 				 * The writer can still be used after the flush.
 				 */
 				Future<WriteResult> flush();
-				template<typename DataIt> auto write(const DataIt& dataBegin, const DataIt& dataEnd){
+				template<typename DataIt> auto& write(const DataIt& dataBegin, const DataIt& dataEnd){
 					buffer.insert(buffer.end(), dataBegin, dataEnd);
-					return this;
+					return *this;
 				}
-				template<typename DataRange> auto write(const DataRange& range){
+				template<typename DataRange> auto& write(const DataRange& range){
 					return write(range.begin(), range.end());
 				}
-				template<typename Data> auto operator<<(Data d){
+				template<typename Data> auto& operator<<(const Data& d){
 					std::ostringstream buff;
 					buff << d;
 					write(buff.str());
-					return this;
+					return *this;
 				}
 		};
 		/**
@@ -256,8 +256,11 @@ template<typename PatIt> Future<IAIOResource::ReadResult> IAIOResource::read_(co
 template<> Future<IAIOResource::WriteResult> IAIOResource::write<std::vector<char>>(const std::vector<char>& dataRange);
 template<> Future<IAIOResource::WriteResult> IAIOResource::write<std::vector<char>>(std::vector<char>&& dataRange);
 
+template<> auto& IAIOResource::Writer::operator<<<std::string>(const std::string&);
+template<> auto& IAIOResource::Writer::operator<<<std::ostringstream>(const std::ostringstream&);
+
 using IORWriter = std::shared_ptr<IAIOResource::Writer>;
-template<typename Data> auto operator<<(const IORWriter& wr, Data d){
+template<typename Data> auto operator<<(const IORWriter& wr, const Data& d){
 	*wr << d;
 	return wr;
 }

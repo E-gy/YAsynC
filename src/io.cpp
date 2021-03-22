@@ -329,6 +329,13 @@ template<> Future<IAIOResource::WriteResult> IAIOResource::write<std::vector<cha
 	return _write(std::move(dataRange));
 }
 
+template<> auto& IAIOResource::Writer::operator<<<std::string>(const std::string& d){
+	return write(d);
+}
+template<> auto& IAIOResource::Writer::operator<<<std::ostringstream>(const std::ostringstream& d){
+	return write(d.str());
+}
+
 //L2
 
 IAIOResource::Writer::Writer(IOResource r) : resource(r), eodnot(new OutsideFuture<IAIOResource::WriteResult>()), lflush(completed(IAIOResource::WriteResult())) {}
