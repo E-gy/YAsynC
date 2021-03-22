@@ -73,8 +73,8 @@ template<typename T> class Future {
 template<typename T> struct Maybe {
 	std::optional<T> t;
 	Maybe() = default;
-	Maybe(const T& v) : t(std::forward<T>(v)) {}
-	Maybe(T && v) : t(std::forward<T>(v)) {}
+	Maybe(const T& v) : t(v) {}
+	Maybe(T && v) : t(std::move(v)) {}
 	inline bool isSome() const { return t.has_value(); }
 	inline operator bool() const { return isSome(); }
 	inline T operator*(){ return std::move(*t); }
