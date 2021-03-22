@@ -404,7 +404,7 @@ template<typename U, typename F> auto operator<<(std::shared_ptr<U> f, F && exp)
 /**
  * U? ↣ V
  * F: () → V
- *  | (V, U) → V
+ *  | (mut V&, U) → ()
  */
 template<typename V, typename U, typename F> class OpImplodeGeneratorM : public IGeneratorT<V> {
 	enum class State {
@@ -430,7 +430,7 @@ template<typename V, typename U, typename F> class OpImplodeGeneratorM : public 
 					auto awar = awa.result();
 					if(awar){ //Precursor has a thing
 						if constexpr (std::is_same<V, void>::value) f(std::move(*awar));
-						else acc = f(acc.move(), std::move(*awar));
+						else f(acc, std::move(*awar));
 					}
 					if(state == State::Fi) return std::move(acc); //Precursor is done
 					else return awa; //Precursor has more
