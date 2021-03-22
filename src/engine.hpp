@@ -280,6 +280,124 @@ template<typename U, typename F> auto operator>>(std::shared_ptr<U> f, F && map)
 	return then(Future(f, *f), std::move(map));
 }
 
+/**
+ * U ↠ V?..
+ * F: U ↠ V?..
+ */
+template<typename V, typename Vs, typename U, typename F> class OpExplodingGenerator : public IGeneratorT<Maybe<V>> {
+	enum class State {
+		I, A0, Ar, Fi
+	};
+	State state = State::I;
+	Future<U> awa;
+	Vs im;
+	typename Vs::iterator imp;
+	F f;
+	public:
+		OpExplodingGenerator(Future<U> w, F && exp) : awa(w), f(std::move(exp)) {}
+		bool done() const override { return state == State::Fi; }
+		Generesume<Maybe<V>> resume(const Yengine*) override {
+			switch(state){
+				case State::I:
+					state = State::A0;
+					return awa;
+				case State::A0:
+					if constexpr (std::is_same<U, void>::value) im = f();
+					else im = f(awa.result());
+					if((imp = im.begin()) == im.end()){ //Explosion resulted in nothing
+						if(awa.state() == FutureState::Completed){ //and precursor is done
+							state = State::Fi;
+							return Maybe<V>{};
+						} else return awa; //Precursor is not done
+					}
+					state = State::Ar;
+					[[fallthrough]];
+				case State::Ar:
+					auto v = std::move(*imp);
+					if(++imp == im.end()) state = awa.state() == FutureState::Completed ? State::Fi : State::I;
+					return Maybe<V>(std::move(v));
+				case State::Fi:
+				default:
+					return Maybe<V>{};
+			}
+		}
+};
+
+/**
+ * U? ↠ V?..
+ * F: U ↠ V?..
+ */
+template<typename V, typename Vs, typename U, typename F> class OpExplodingGeneratorM : public IGeneratorT<Maybe<V>> {
+	enum class State {
+		I, A0, Ar, Fi
+	};
+	State state = State::I;
+	Future<Maybe<U>> awa;
+	Vs im;
+	typename Vs::iterator imp;
+	F f;
+	public:
+		OpExplodingGeneratorM(Future<Maybe<U>> w, F && exp) : awa(w), f(std::move(exp)) {}
+		bool done() const override { return state == State::Fi; }
+		Generesume<Maybe<V>> resume(const Yengine*) override {
+			switch(state){
+				case State::I:
+					state = State::A0;
+					return awa;
+				case State::A0:
+					auto awar = awa.result();
+					if(!awar){ //Precursor got nothing
+						if(awa.state() == FutureState::Completed){ //and precursor is done
+							state = State::Fi;
+							return Maybe<V>{};
+						} else return awa; //Precursor is not done, just returned nothing for some reason
+					}
+					if constexpr (std::is_same<U, void>::value) im = f();
+					else im = f(std::move(*awar));
+					if((imp = im.begin()) == im.end()){ //Explosion resulted in nothing
+						if(awa.state() == FutureState::Completed){ //and precursor is done
+							state = State::Fi;
+							return Maybe<V>{};
+						} else return awa; //Precursor is not done
+					}
+					state = State::Ar;
+					[[fallthrough]];
+				case State::Ar:
+					auto v = std::move(*imp);
+					if(++imp == im.end()) state = awa.state() == FutureState::Completed ? State::Fi : State::I;
+					return Maybe<V>(std::move(v));
+				case State::Fi:
+				default:
+					return Maybe<V>{};
+			}
+		}
+};
+
+template<typename V, typename Vs, typename U, typename F> Future<Maybe<V>> explode_spec0(Future<U> f, F && exp, _typed<Vs>, _typed<V>){
+	return defer(Generator<Maybe<V>>(new OpExplodingGenerator<V, Vs, U, F>(f, std::move(exp))));
+}
+template<typename V, typename Vs, typename U, typename F> Future<Maybe<V>> explode_spec0(Future<Maybe<U>> f, F && exp, _typed<Vs>, _typed<V>){
+	return defer(Generator<Maybe<V>>(new OpExplodingGeneratorM<V, Vs, U, F>(f, std::move(exp))));
+}
+template<typename U, typename F> auto explode_spec1(Future<U> f, F && exp){
+	using Vs = std::decay_t<decltype(map(f.result()))>;
+	return explode_spec0(f, std::move(exp), _typed<Vs>{}, _typed<typename Vs::value_type>{});
+}
+template<typename U, typename F> auto explode_spec1(Future<Maybe<U>> f, F && exp){
+	using Vs = std::decay_t<decltype(map(*f.result()))>;
+	return explode_spec0(f, std::move(exp), _typed<Vs>{}, _typed<typename Vs::value_type>{});
+}
+
+template<typename U, typename F> auto explode(Future<U> f, F && exp){
+	return explode_spec1(f, std::move(exp));
+}
+template<typename U, typename F> auto operator<<(Future<U> f, F && exp){
+	return explode(f, std::move(exp));
+}
+template<typename U, typename F> auto operator<<(std::shared_ptr<U> f, F && exp){
+	return explode(Future(f, *f), std::move(exp));
+}
+
 template<typename V, typename F, typename... State> class GeneratorLGenerator : public IGeneratorT<V> {
 	bool d = false;
 	std::tuple<State...> state;
