@@ -237,10 +237,10 @@ template <typename V, typename U, typename F> Future<V> then_spec1(Future<U> f, 
 template <typename V, typename U, typename F> Future<V> then_spec1(Future<U> f, F && map, _typed<Future<V>>){
 	return defer(Generator<V>(new OpDirectGeneratorF<V, U, F>(f, std::move(map))));
 }
-template <typename V, typename U, typename F> Future<Maybe<V>> then_spec1(Future<Maybe<U>> f, F && map, _typed<Maybe<V>>){
+template <typename V, typename U, typename F> Future<Maybe<V>> then_spec1(Future<Maybe<U>> f, F && map, _typed<V>){
 	return defer(Generator<Maybe<V>>(new OpDirectGeneratorMM<V, U, F>(f, std::move(map))));
 }
-template <typename V, typename U, typename F> Future<Maybe<V>> then_spec1(Future<Maybe<U>> f, F && map, _typed<Future<Maybe<V>>>){
+template <typename V, typename U, typename F> Future<Maybe<V>> then_spec1(Future<Maybe<U>> f, F && map, _typed<Future<V>>){
 	return defer(Generator<Maybe<V>>(new OpDirectGeneratorFMM<V, U, F>(f, std::move(map))));
 }
 
