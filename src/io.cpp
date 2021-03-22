@@ -329,10 +329,10 @@ template<> Future<IAIOResource::WriteResult> IAIOResource::write<std::vector<cha
 	return _write(std::move(dataRange));
 }
 
-template<> auto& IAIOResource::Writer::operator<<<std::string>(const std::string& d){
+template<> IAIOResource::Writer& IAIOResource::Writer::operator<<<std::string>(const std::string& d){
 	return write(d);
 }
-template<> auto& IAIOResource::Writer::operator<<<std::ostringstream>(const std::ostringstream& d){
+template<> IAIOResource::Writer& IAIOResource::Writer::operator<<<std::ostringstream>(const std::ostringstream& d){
 	return write(d.str());
 }
 
