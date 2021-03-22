@@ -122,7 +122,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 		};
 		std::shared_ptr<OutsideFuture<ListenEvent>> engif;
 		void notify(ListenEvent e){
-			engif->completed(e);
+			engif->completed(std::move(e));
 			engine->engine->notify(engif);
 		}
 		void notify(ListenEventType e){ notify(ListenEvent{e, 0}); }
@@ -203,7 +203,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 				};
 				if(engif->state() == FutureState::Completed){
 					auto event = engif->running();
-					switch(event->type){
+					switch(event.type){
 						case ListenEventType::Accept:{
 							#ifdef _WIN32
 							if(::setsockopt(lconn->sock(), SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, reinterpret_cast<char*>(&sock), sizeof(sock)) == SOCKET_ERROR){
@@ -234,7 +234,7 @@ template<int SDomain, int SType, int SProto, typename AddressInfo, typename Errs
 							break;
 						}
 						case ListenEventType::Error:
-							if(erracc(self, event->err, "Async accept error")) return stahp();
+							if(erracc(self, event.err, "Async accept error")) return stahp();
 							break;
 						case ListenEventType::Close: return stahp();
 						default: if(erracc(self, 0, "Received unknown event")) return stahp();
