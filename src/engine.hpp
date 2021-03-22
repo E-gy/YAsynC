@@ -448,12 +448,21 @@ template<typename V, typename U, typename F> class OpImplodeGeneratorM : public 
 		}
 };
 
+template<typename T> struct identity { using type = T; };
+
+template<typename T> using noargscall_t = decltype(std::declval<T>()());
+template<typename, typename = std::void_t<>> struct has_noargscall : std::false_type {};
+template<typename T> struct has_noargscall<T, std::void_t<noargscall_t<T>>> : std::true_type {};
+
 template<typename V, typename U, typename F> Future<V> implode_spec0(Future<Maybe<U>> f, F && imp, _typed<V>){
 	return defer(Generator<V>(new OpImplodeGeneratorM<V, U, F>(f, std::move(imp))));
 }
 template<typename U, typename F> auto implode_spec1(Future<U> f, F && imp){
-	using V = std::decay_t<decltype(imp())>;
-	return implode_spec0(f, std::move(imp), _typed<V>{});
+	if constexpr (has_noargscall<F>::value) {
+		using V = noargscall_t<F>;
+		return implode_spec0(f, std::move(imp), _typed<V>{});
+	}
+	else return implode_spec0(f, std::move(imp), _typed<void>{});
 }
 
 template<typename U, typename F> auto implode(Future<U> f, F && exp){
