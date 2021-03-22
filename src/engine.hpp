@@ -380,11 +380,11 @@ template<typename V, typename Vs, typename U, typename F> Future<Maybe<V>> explo
 	return defer(Generator<Maybe<V>>(new OpExplodingGeneratorM<V, Vs, U, F>(f, std::move(exp))));
 }
 template<typename U, typename F> auto explode_spec1(Future<U> f, F && exp){
-	using Vs = std::decay_t<decltype(map(f.result()))>;
+	using Vs = std::decay_t<decltype(exp(f.result()))>;
 	return explode_spec0(f, std::move(exp), _typed<Vs>{}, _typed<typename Vs::value_type>{});
 }
 template<typename U, typename F> auto explode_spec1(Future<Maybe<U>> f, F && exp){
-	using Vs = std::decay_t<decltype(map(*f.result()))>;
+	using Vs = std::decay_t<decltype(exp(*f.result()))>;
 	return explode_spec0(f, std::move(exp), _typed<Vs>{}, _typed<typename Vs::value_type>{});
 }
 
