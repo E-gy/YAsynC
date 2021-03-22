@@ -43,7 +43,7 @@ template<typename T> Genf<T> defer(Generator<T> gen){
  * U → V
  * F: U → V
  */
-template<typename V, typename U, typename F> class ChainingGenerator : public IGeneratorT<V> {
+template<typename V, typename U, typename F> class OpDirectGenerator0 : public IGeneratorT<V> {
 	enum class State {
 		I, A, Fi
 	};
@@ -51,7 +51,7 @@ template<typename V, typename U, typename F> class ChainingGenerator : public IG
 	Future<U> awa;
 	F f;
 	public:
-		ChainingGenerator(Future<U> w, F && map) : awa(w), f(std::move(map)) {}
+		OpDirectGenerator0(Future<U> w, F && map) : awa(w), f(std::move(map)) {}
 		bool done() const override { return state == State::Fi; }
 		Generesume<V> resume(const Yengine*) override {
 			switch(state){
@@ -74,19 +74,72 @@ template<typename V, typename U, typename F> class ChainingGenerator : public IG
 };
 
 /**
+ * U? → V?
+ * F: U → V|V?
+ */
+template<typename V, typename U, typename F> class OpDirectGeneratorMM : public IGeneratorT<Maybe<V>> {
+	enum class State {
+		I, A, Fi
+	};
+	State state = State::I;
+	Future<Maybe<U>> awa;
+	F f;
+	public:
+		OpDirectGeneratorMM(Future<Maybe<U>> w, F && map) : awa(w), f(std::move(map)) {}
+		bool done() const override { return state == State::Fi; }
+		Generesume<Maybe<V>> resume(const Yengine*) override {
+			switch(state){
+				case State::I:
+					state = State::A;
+					return awa;
+				case State::A: {
+					if(awa.state() == FutureState::Completed) state = State::Fi;
+					auto awar = awa.result();
+					if(awar){ //Precursor has a thing
+						Maybe<V> r;
+						if constexpr (std::is_same<U, void>::value){
+							using FV = std::decay_t<decltype(f())>;
+							if constexpr (std::is_same<Maybe<V>, FV>::value) r = f();
+							else if constexpr (std::is_same<V, void>::value){ f(); r = Maybe<V>(true); }
+							else r = Maybe<V>{f()};
+						}
+						else {
+							using FV = std::decay_t<decltype(f(awar))>;
+							if constexpr (std::is_same<Maybe<V>, FV>::value) r = f(std::move(awar));
+							else if constexpr (std::is_same<V, void>::value){ f(std::move(awar)); r = Maybe<V>(true); }
+							else r = Maybe<V>{f(std::move(awar))};
+						}
+						if(state == State::Fi) return r; //Precursor is done, return whatever we made
+						else if(r){ //Precursor is not done, but we made use of last value
+							state = State::I;
+							return r;
+						} else return awa; //Precursor is done, and we didn't use last value
+					} else {
+						if(state == State::Fi) return Maybe<V>{}; //Precursor is done, and there was no more
+						else return awa; //Precursor is not done, just returned nothing for some reason
+					}
+				}
+				case State::Fi:
+				default:
+					return Maybe<V>{};
+			}
+		}
+};
+
+/**
  * U → V...
  * F: U → V^
  */
-template<typename V, typename U, typename F> class ChainingWrappingGenerator : public IGeneratorT<V> {
+template<typename V, typename U, typename F> class OpDirectGeneratorF : public IGeneratorT<V> {
 	enum class State {
 		I, A0, A1r, A1, Fi
 	};
 	State state = State::I;
 	Future<U> awa;
 	std::optional<Future<V>> nxt = std::nullopt;
-	F gf;
+	F f;
 	public:
-		ChainingWrappingGenerator(Future<U> w, F && f) : awa(w), gf(std::move(f)) {}
+		OpDirectGeneratorF(Future<U> w, F && gf) : awa(w), f(std::move(gf)) {}
 		bool done() const override { return state == State::Fi; }
 		Generesume<V> resume(const Yengine*) override {
 			switch(state){
@@ -94,8 +147,8 @@ template<typename V, typename U, typename F> class ChainingWrappingGenerator : p
 					state = State::A0;
 					return awa;
 				case State::A0: {
-					if constexpr (std::is_same<U, void>::value) nxt = gf();
-					else nxt = gf(awa.result());
+					if constexpr (std::is_same<U, void>::value) nxt = f();
+					else nxt = f(awa.result());
 					[[fallthrough]];
 				}
 				case State::A1r:
@@ -109,7 +162,8 @@ template<typename V, typename U, typename F> class ChainingWrappingGenerator : p
 							nxt = std::nullopt;
 						}
 					else state = State::A1r;
-					return nxt->result();
+					if constexpr (std::is_same<V, void>::value) return monoid<V>();
+					else return nxt->result();
 				}
 				case State::Fi: //Never
 				default:
@@ -118,12 +172,95 @@ template<typename V, typename U, typename F> class ChainingWrappingGenerator : p
 		}
 };
 
+/**
+ * U? → V?..
+ * F: U → V^|V^?
+ */
+template<typename V, typename U, typename F> class OpDirectGeneratorFMM : public IGeneratorT<Maybe<V>> {
+	enum class State {
+		I, A0, A1r, A1, Fi
+	};
+	State state = State::I;
+	Future<Maybe<U>> awa;
+	std::optional<Future<V>> nxt = std::nullopt;
+	F f;
+	public:
+		OpDirectGeneratorFMM(Future<Maybe<U>> w, F && gf) : awa(w), f(std::move(gf)) {}
+		bool done() const override { return state == State::Fi; }
+		Generesume<V> resume(const Yengine*) override {
+			switch(state){
+				case State::I:
+					state = State::A0;
+					return awa;
+				case State::A0: {
+					if(awa.state() == FutureState::Completed) state = State::Fi;
+					auto awar = awa.result();
+					if(awar){ //Precursor has a thing
+						Maybe<Future<V>> nx;
+						if constexpr (std::is_same<U, void>::value) nx = f();
+						else nx = f(std::move(*awar));
+						if(nx){ //We made use of thing
+							state = State::A1;
+							return *(nxt = *nx);
+						} else if(state == State::Fi) return Maybe<V>{}; //We didn't make use of thing, and precursor is done
+						else return awa; //We didn't make use of thing, but precursor is not done
+					} else {
+						if(state == State::Fi) return Maybe<V>{}; //Precursor is done, and there was no more
+						else return awa; //Precursor is not done, just returned nothing for some reason
+					}
+				}
+				case State::A1r:
+					state = State::A1;
+					return *nxt;
+				case State::A1: {
+					if(nxt->state() == FutureState::Completed) //our thingy completed
+						if(awa.state() == FutureState::Completed) state = State::Fi; //and precursor completed
+						else {
+							state = State::I;
+							nxt = std::nullopt;
+						}
+					else state = State::A1r; //our thingy has more thingies
+					if constexpr (std::is_same<V, void>::value) return Maybe<V>(true);
+					else return Maybe<V>{nxt->result()};
+				}
+				case State::Fi:
+				default:
+					return Maybe<V>{};
+			}
+		}
+};
+
 template <typename T> struct _typed{};
-template <typename V, typename U, typename F> Future<V> then_spec(Future<U> f, F && map, _typed<V>){
-	return defer(Generator<V>(new ChainingGenerator<V, U, F>(f, std::move(map))));
+template <typename V, typename U, typename F> Future<V> then_spec1(Future<U> f, F && map, _typed<V>){
+	return defer(Generator<V>(new OpDirectGenerator0<V, U, F>(f, std::move(map))));
 }
-template <typename V, typename U, typename F> Future<V> then_spec(Future<U> f, F && map, _typed<Future<V>>){
-	return defer(Generator<V>(new ChainingWrappingGenerator<V, U, F>(f, std::move(map))));
+template <typename V, typename U, typename F> Future<V> then_spec1(Future<U> f, F && map, _typed<Future<V>>){
+	return defer(Generator<V>(new OpDirectGeneratorF<V, U, F>(f, std::move(map))));
+}
+template <typename V, typename U, typename F> Future<Maybe<V>> then_spec1(Future<Maybe<U>> f, F && map, _typed<Maybe<V>>){
+	return defer(Generator<Maybe<V>>(new OpDirectGeneratorMM<V, U, F>(f, std::move(map))));
+}
+template <typename V, typename U, typename F> Future<Maybe<V>> then_spec1(Future<Maybe<U>> f, F && map, _typed<Future<Maybe<V>>>){
+	return defer(Generator<Maybe<V>>(new OpDirectGeneratorFMM<V, U, F>(f, std::move(map))));
+}
+
+template<typename U, typename F> auto then_spec2(Future<U> f, F && map){
+	if constexpr (std::is_same<U, void>::value){
+		using V = std::decay_t<decltype(map())>;
+		return then_spec1(f, std::move(map), _typed<V>{});
+	} else {
+		using V = std::decay_t<decltype(map(f.result()))>;
+		return then_spec1(f, std::move(map), _typed<V>{});
+	}
+}
+template<typename U, typename F> auto then_spec2(Future<Maybe<U>> f, F && map){
+	if constexpr (std::is_same<U, void>::value){
+		using V = std::decay_t<decltype(map())>;
+		return then_spec1(f, std::move(map), _typed<V>{});
+	} else {
+		using V = std::decay_t<decltype(map(*f.result()))>;
+		return then_spec1(f, std::move(map), _typed<V>{});
+	}
 }
 
 /**
@@ -133,13 +270,7 @@ template <typename V, typename U, typename F> Future<V> then_spec(Future<U> f, F
  * @returns @ref
  */
 template<typename U, typename F> auto then(Future<U> f, F && map){
-	if constexpr (std::is_same<U, void>::value){
-		using V = std::decay_t<decltype(map())>;
-		return then_spec(f, std::move(map), _typed<V>{});
-	} else {
-		using V = std::decay_t<decltype(map(f.result()))>;
-		return then_spec(f, std::move(map), _typed<V>{});
-	}
+	return then_spec2(f, map);
 }
 
 template<typename U, typename F> auto operator>>(Future<U> f, F && map){
