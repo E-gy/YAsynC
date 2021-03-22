@@ -104,10 +104,10 @@ template<typename V, typename U, typename F> class OpDirectGeneratorMM : public 
 							else r = Maybe<V>{f()};
 						}
 						else {
-							using FV = std::decay_t<decltype(f(awar))>;
-							if constexpr (std::is_same<Maybe<V>, FV>::value) r = f(std::move(awar));
-							else if constexpr (std::is_same<V, void>::value){ f(std::move(awar)); r = Maybe<V>(true); }
-							else r = Maybe<V>{f(std::move(awar))};
+							using FV = std::decay_t<decltype(f(*awar))>;
+							if constexpr (std::is_same<Maybe<V>, FV>::value) r = f(std::move(*awar));
+							else if constexpr (std::is_same<V, void>::value){ f(std::move(*awar)); r = Maybe<V>(true); }
+							else r = Maybe<V>{f(std::move(*awar))};
 						}
 						if(state == State::Fi) return r; //Precursor is done, return whatever we made
 						else if(r){ //Precursor is not done, but we made use of last value
