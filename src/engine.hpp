@@ -398,6 +398,64 @@ template<typename U, typename F> auto operator<<(std::shared_ptr<U> f, F && exp)
 	return explode(Future(f, *f), std::move(exp));
 }
 
+/**
+ * U? ↣ V
+ * F: () → V
+ *  | (V, U) → V
+ */
+template<typename V, typename U, typename F> class OpImplodeGeneratorM : public IGeneratorT<V> {
+	enum class State {
+		I, A, Fi
+	};
+	State state = State::I;
+	Future<Maybe<U>> awa;
+	F f;
+	monoid<V> acc;
+	public:
+		OpImplodeGeneratorM(Future<Maybe<U>> w, F && map) : awa(w), f(std::move(map)) {
+			if constexpr (std::is_same<V, void>::value) acc = monoid<V>();
+			else acc = f();
+		}
+		bool done() const override { return state == State::Fi; }
+		Generesume<V> resume(const Yengine*) override {
+			switch(state){
+				case State::I:
+					state = State::A;
+					return awa;
+				case State::A:
+					if(awa.state() == FutureState::Completed) state = State::Fi;
+					auto awar = awa.result();
+					if(awar){ //Precursor has a thing
+						if constexpr (std::is_same<V, void>::value) f(std::move(*awar));
+						else acc = f(acc.move(), std::move(*awar));
+					}
+					if(state == State::Fi) return std::move(acc); //Precursor is done
+					else return awa; //Precursor has more
+				case State::Fi: //Never
+				default:
+					return awa;
+			}
+		}
+};
+
+template<typename V, typename U, typename F> Future<V> implode_spec0(Future<Maybe<U>> f, F && imp, _typed<V>){
+	return defer(Generator<V>(new OpImplodeGeneratorM<V, U, F>(f, std::move(imp))));
+}
+template<typename U, typename F> auto implode_spec1(Future<U> f, F && imp){
+	using V = std::decay_t<decltype(imp())>;
+	return implode_spec0(f, std::move(imp), _typed<V>{});
+}
+
+template<typename U, typename F> auto implode(Future<U> f, F && exp){
+	return implode_spec1(f, std::move(exp));
+}
+template<typename U, typename F> auto operator>>=(Future<U> f, F && exp){
+	return implode(f, std::move(exp));
+}
+template<typename U, typename F> auto operator>>=(std::shared_ptr<U> f, F && exp){
+	return implode(Future(f, *f), std::move(exp));
+}
+
 template<typename V, typename F, typename... State> class GeneratorLGenerator : public IGeneratorT<V> {
 	bool d = false;
 	std::tuple<State...> state;
