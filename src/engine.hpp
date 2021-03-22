@@ -312,10 +312,11 @@ template<typename V, typename Vs, typename U, typename F> class OpExplodingGener
 					}
 					state = State::Ar;
 					[[fallthrough]];
-				case State::Ar:
+				case State::Ar: {
 					auto v = std::move(*imp);
 					if(++imp == im.end()) state = awa.state() == FutureState::Completed ? State::Fi : State::I;
 					return Maybe<V>(std::move(v));
+				}
 				case State::Fi:
 				default:
 					return Maybe<V>{};
@@ -344,7 +345,7 @@ template<typename V, typename Vs, typename U, typename F> class OpExplodingGener
 				case State::I:
 					state = State::A0;
 					return awa;
-				case State::A0:
+				case State::A0: {
 					auto awar = awa.result();
 					if(!awar){ //Precursor got nothing
 						if(awa.state() == FutureState::Completed){ //and precursor is done
@@ -362,10 +363,12 @@ template<typename V, typename Vs, typename U, typename F> class OpExplodingGener
 					}
 					state = State::Ar;
 					[[fallthrough]];
-				case State::Ar:
+				}
+				case State::Ar: {
 					auto v = std::move(*imp);
 					if(++imp == im.end()) state = awa.state() == FutureState::Completed ? State::Fi : State::I;
 					return Maybe<V>(std::move(v));
+				}
 				case State::Fi:
 				default:
 					return Maybe<V>{};
@@ -422,7 +425,7 @@ template<typename V, typename U, typename F> class OpImplodeGeneratorM : public 
 				case State::I:
 					state = State::A;
 					return awa;
-				case State::A:
+				case State::A: {
 					if(awa.state() == FutureState::Completed) state = State::Fi;
 					auto awar = awa.result();
 					if(awar){ //Precursor has a thing
@@ -431,6 +434,7 @@ template<typename V, typename U, typename F> class OpImplodeGeneratorM : public 
 					}
 					if(state == State::Fi) return std::move(acc); //Precursor is done
 					else return awa; //Precursor has more
+				}
 				case State::Fi: //Never
 				default:
 					return awa;
