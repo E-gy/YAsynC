@@ -109,10 +109,10 @@ template<typename V, typename U, typename F> class OpDirectGeneratorMM : public 
 							else if constexpr (std::is_same<V, void>::value){ f(std::move(awar)); r = Maybe<V>(true); }
 							else r = Maybe<V>{f(std::move(awar))};
 						}
-						if(state == State::Fi) return r; //Precursor is done, return whatever we made
+						if(state == State::Fi) return std::move(r); //Precursor is done, return whatever we made
 						else if(r){ //Precursor is not done, but we made use of last value
 							state = State::I;
-							return r;
+							return std::move(r);
 						} else return awa; //Precursor is done, and we didn't use last value
 					} else {
 						if(state == State::Fi) return Maybe<V>{}; //Precursor is done, and there was no more
