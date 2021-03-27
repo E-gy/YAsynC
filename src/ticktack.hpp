@@ -51,7 +51,7 @@ class TickTack {
 		};
 		std::mutex lock;
 		std::set<El> ent;
-		Id nid = UnId+1;
+		std::atomic<Id> nid = UnId+1;
 	public:
 		TickTack();
 		/**
