@@ -144,6 +144,15 @@ class IAIOResource : public IResource {
 		}
 
 		/**
+		 * Peeks up to number of bytes, or EOD.
+		 * Like reading, if enough data is available in the buffer no IO is performed.
+		 * Unlike reading, peeking does not consume the data (and thus leaves / adds it to the buffer).
+		 */
+		template<typename T> Future<result<T, std::string>> peek(size_t upto){
+			return peek<std::vector<char>>(upto) >> mapVecToT<T>();
+		}
+
+		/**
 		 * Writes data
 		 */
 		template<typename DataP> Future<WriteResult> write(DataP data, size_t dataSize){
@@ -212,6 +221,8 @@ class IAIOResource : public IResource {
 
 template<> Future<IAIOResource::ReadResult> IAIOResource::read<std::vector<char>>();
 template<> Future<IAIOResource::ReadResult> IAIOResource::read<std::vector<char>>(size_t upto);
+
+template<> Future<IAIOResource::ReadResult> IAIOResource::peek<std::vector<char>>(size_t upto);
 
 template<typename PatIt> Future<IAIOResource::ReadResult> IAIOResource::read_(const PatIt& patBegin, const PatIt& patEnd){
 	for(size_t i = 0; i < readbuff.size(); i++){

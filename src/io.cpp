@@ -322,6 +322,14 @@ template<> Future<IAIOResource::ReadResult> IAIOResource::read<std::vector<char>
 	});};
 }
 
+template<> Future<IAIOResource::ReadResult> IAIOResource::peek<std::vector<char>>(size_t upto){
+	if(readbuff.size() >= upto) return completed(IAIOResource::ReadResult(std::vector<char>(readbuff.begin(), readbuff.begin()+upto)));
+	return _read(upto-readbuff.size()) >> [this, self = slf.lock(), upto](auto rr){ return rr.mapOk([=](auto data){
+		std::move(data.begin(), data.end(), std::back_inserter(readbuff));
+		return std::vector<char>(readbuff.begin(), readbuff.begin()+std::min(readbuff.size(), upto));
+	});};
+}
+
 template<> Future<IAIOResource::WriteResult> IAIOResource::write<std::vector<char>>(const std::vector<char>& dataRange){
 	return _write(std::vector<char>(dataRange));
 }
